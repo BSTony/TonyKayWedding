@@ -71,8 +71,27 @@
     
     /* 對戰電腦專屬 */
     .vs-computer-board { display: none; }
+    .canvas-container { display: none; width: 100%; height: 50vh; background: #e0f7fa; position: relative; overflow: hidden; border-radius: 10px; margin-bottom: 10px; box-shadow: inset 0 0 10px rgba(0,0,0,0.1); }
+    canvas { display: block; width: 100%; height: 100%; }
+    .controls { display: none; padding: 10px 20px; gap: 15px; }
+    .controls .dpad { display: flex; gap: 10px; flex: 1; }
+    .controls .action { flex: 1; display: flex; justify-content: flex-end; }
+    .btn-control { 
+      background: var(--bg-card); border: none; box-shadow: 0 4px 10px rgba(0,0,0,0.15);
+      border-radius: 12px; font-size: 24px; color: var(--primary); font-weight: 900;
+      display: flex; align-items: center; justify-content: center;
+      user-select: none; touch-action: manipulation;
+    }
+    .btn-control:active { transform: scale(0.92); background: #eee; }
+    .btn-dir { width: 60px; height: 60px; }
+    .btn-hit { width: 100px; height: 60px; background: linear-gradient(135deg, var(--primary), #00f2fe); color: white; border-radius: 20px;}
+    .btn-hit:active { background: var(--primary-dark); }
+    
     #screen-game.mode-computer .vs-computer-board { display: flex; }
     #screen-game.mode-computer .global-board { display: none; }
+    #screen-game.mode-computer .tap-area { display: none; }
+    #screen-game.mode-computer .canvas-container { display: block; }
+    #screen-game.mode-computer .controls { display: flex; }
     
   </style>
 </head>
@@ -99,8 +118,8 @@
         加入 新娘隊
       </button>
       <button class="btn-team computer" data-team="computer">
-        <span style="font-size: 40px;">🤖</span>
-        單人練習 (對戰電腦)
+        <span style="font-size: 40px;">🏸</span>
+        真實羽球對戰 (電腦)
       </button>
     </div>
   </div>
@@ -121,20 +140,37 @@
     </div>
     
     <!-- 對戰電腦分數版 (新邏輯) -->
-    <div class="score-board vs-computer-board">
+    <div class="score-board vs-computer-board" style="margin-bottom: 10px;">
       <div class="score-col">
-        <div class="score-label">玩家分數</div>
+        <div class="score-label">玩家 (Player)</div>
         <div class="score-val me" id="my-score-vs">0</div>
       </div>
       <div class="score-col" style="display:flex;align-items:center;font-weight:900;color:var(--border);">
-        VS
+        WIN 5
       </div>
       <div class="score-col">
-        <div class="score-label">電腦分數</div>
+        <div class="score-label">電腦 (Bot)</div>
         <div class="score-val comp" id="comp-score-vs">0</div>
       </div>
     </div>
 
+    <!-- 真實羽球遊戲畫布 (僅電腦模式顯示) -->
+    <div class="canvas-container animate-scaleIn">
+      <canvas id="game-canvas"></canvas>
+    </div>
+    
+    <!-- 真實羽球控制器 (僅電腦模式顯示) -->
+    <div class="controls animate-fadeInUp">
+      <div class="dpad">
+        <button class="btn-control btn-dir" id="btn-left">⬅️</button>
+        <button class="btn-control btn-dir" id="btn-right">➡️</button>
+      </div>
+      <div class="action">
+        <button class="btn-control btn-hit" id="btn-hit">揮拍🏸</button>
+      </div>
+    </div>
+
+    <!-- 多人狂點區域 (僅連線模式顯示) -->
     <div class="tap-area animate-scaleIn">
       <button id="tap-btn" disabled>準備中</button>
     </div>

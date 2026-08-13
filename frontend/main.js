@@ -1,14 +1,12 @@
 import { db, ref, onValue, update, increment } from './firebase.js';
+import { BadmintonEngine } from './badmintonEngine.js';
 
 let myTeam = null;
 let myTaps = 0;
 let isPlaying = false;
 
 // 電腦對戰變數
-let computerTaps = 0;
-let computerInterval = null;
-let gameTimer = null;
-let timeLeft = 10;
+let gameEngine = null;
 
 const screenSelect = document.getElementById('screen-select');
 const screenGame = document.getElementById('screen-game');
@@ -40,81 +38,77 @@ document.querySelectorAll('.btn-team').forEach(btn => {
       teamText.innerText = '👧 新娘隊';
       tapBtn.style.background = 'linear-gradient(135deg, #ff0844, #ffb199)';
     } else if (myTeam === 'computer') {
-      teamText.innerText = '🤖 單人練習 (對戰電腦)';
-      tapBtn.style.background = 'linear-gradient(135deg, #8a2be2, #d4a5fa)';
+      teamText.innerText = '🏸 單人對戰 (真實羽球)';
       screenGame.classList.add('mode-computer');
-      startComputerMode();
+      startRealBadmintonMode();
     }
   });
 });
 
-// 單人對戰電腦邏輯
-function startComputerMode() {
-  myTaps = 0;
-  computerTaps = 0;
-  timeLeft = 10; // 10秒挑戰
-  isPlaying = true;
-  
-  myScoreVsEl.innerText = myTaps;
-  compScoreVsEl.innerText = computerTaps;
-  
-  tapBtn.disabled = false;
+// 單人對戰真實羽球邏輯
+function startRealBadmintonMode() {
+  gameStatus.innerText = '比賽開始！請用下方按鈕操控！';
   gameStatus.style.background = 'rgba(138,43,226,0.5)';
   
-  // 電腦自動點擊 (每秒點 3-6 下)
-  computerInterval = setInterval(() => {
-    if (!isPlaying) return;
-    const clicks = Math.floor(Math.random() * 4) + 3;
-    computerTaps += clicks;
-    compScoreVsEl.innerText = computerTaps;
-  }, 1000);
-  
-  // 倒數計時
-  gameTimer = setInterval(() => {
-    timeLeft--;
-    gameStatus.innerText = `比賽中！剩下 ${timeLeft} 秒！瘋狂點擊！`;
+  if (!gameEngine) {
+    gameEngine = new BadmintonEngine('game-canvas');
     
-    if (timeLeft <= 0) {
-      endComputerMode();
-    }
-  }, 1000);
-  
-  gameStatus.innerText = `比賽中！剩下 ${timeLeft} 秒！瘋狂點擊！`;
-  tapBtn.innerText = '揮拍！\n(點擊)';
-}
-
-function endComputerMode() {
-  isPlaying = false;
-  clearInterval(computerInterval);
-  clearInterval(gameTimer);
-  tapBtn.disabled = true;
-  
-  if (myTaps > computerTaps) {
-    gameStatus.innerText = '🎉 勝利！你打敗了電腦！(獲得 50 積分)';
-    gameStatus.style.background = 'rgba(0,255,0,0.5)';
-    // 加分到排行榜
-    if (uid) {
-      update(ref(db, 'players/' + uid), {
-        points: increment(50),
-        wins: increment(1)
-      });
-    }
-  } else if (myTaps < computerTaps) {
-    gameStatus.innerText = '💀 失敗！電腦太強了！';
-    gameStatus.style.background = 'rgba(255,0,0,0.5)';
-  } else {
-    gameStatus.innerText = '🤝 平手！';
-    gameStatus.style.background = 'rgba(255,165,0,0.5)';
+    // Bind Controls
+    const btnLeft = document.getElementById('btn-left');
+    const btnRight = document.getElementById('btn-right');
+    const btnHit = document.getElementById('btn-hit');
+    
+    const bindBtn = (btn, key, val) => {
+      btn.addEventListener('pointerdown', (e) => { e.preventDefault(); gameEngine.keys[key] = val; });
+      btn.addEventListener('pointerup', (e) => { e.preventDefault(); gameEngine.keys[key] = !val; });
+      btn.addEventListener('pointerleave', (e) => { e.preventDefault(); gameEngine.keys[key] = !val; });
+    };
+    
+    bindBtn(btnLeft, 'left', true);
+    bindBtn(btnRight, 'right', true);
+    
+    btnHit.addEventListener('pointerdown', (e) => {
+      e.preventDefault();
+      gameEngine.playerHit();
+    });
+    
+    gameEngine.onScoreUpdate = (pScore, cScore) => {
+      myScoreVsEl.innerText = pScore;
+      compScoreVsEl.innerText = cScore;
+    };
+    
+    gameEngine.onGameOver = (playerWon) => {
+      if (playerWon) {
+        gameStatus.innerText = '🎉 勝利！你打敗了電腦！(獲得 50 積分)';
+        gameStatus.style.background = 'rgba(0,255,0,0.5)';
+        if (uid) {
+          update(ref(db, 'players/' + uid), {
+            points: increment(50),
+            wins: increment(1)
+          });
+        }
+      } else {
+        gameStatus.innerText = '💀 失敗！電腦獲得了 5 分！';
+        gameStatus.style.background = 'rgba(255,0,0,0.5)';
+      }
+      
+      setTimeout(() => {
+        if(confirm('要再挑戰一次嗎？')) {
+          gameEngine.start();
+          gameStatus.innerText = '比賽開始！請用下方按鈕操控！';
+          gameStatus.style.background = 'rgba(138,43,226,0.5)';
+          myScoreVsEl.innerText = '0';
+          compScoreVsEl.innerText = '0';
+        } else {
+          window.location.href = './lobby.html';
+        }
+      }, 3000);
+    };
   }
   
-  setTimeout(() => {
-    if(confirm('要再挑戰一次嗎？')) {
-      startComputerMode();
-    } else {
-      window.location.href = './lobby.html';
-    }
-  }, 3000);
+  gameEngine.start();
 }
+
 
 // Listen to Global Game State (多人連線邏輯)
 const stateRef = ref(db, 'gameState');
@@ -149,21 +143,17 @@ onValue(stateRef, (snapshot) => {
 // Handle Tapping
 tapBtn.addEventListener('pointerdown', (e) => {
   e.preventDefault(); // Prevent zoom/scroll on mobile
-  if (!isPlaying || !myTeam) return;
+  if (!isPlaying || !myTeam || myTeam === 'computer') return;
 
   myTaps++;
   
-  if (myTeam === 'computer') {
-    myScoreVsEl.innerText = myTaps;
+  myTapsEl.innerText = myTaps;
+  // Send tap to Firebase for global match
+  const updates = {};
+  if (myTeam === 'left') {
+    updates['gameState/tapsLeft'] = increment(1);
   } else {
-    myTapsEl.innerText = myTaps;
-    // Send tap to Firebase for global match
-    const updates = {};
-    if (myTeam === 'left') {
-      updates['gameState/tapsLeft'] = increment(1);
-    } else {
-      updates['gameState/tapsRight'] = increment(1);
-    }
-    update(ref(db), updates).catch(err => console.error(err));
+    updates['gameState/tapsRight'] = increment(1);
   }
+  update(ref(db), updates).catch(err => console.error(err));
 });
