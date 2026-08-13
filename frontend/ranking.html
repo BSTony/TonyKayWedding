@@ -1,0 +1,106 @@
+<!DOCTYPE html>
+<html lang="zh-TW">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no">
+  <title>排行榜 🏆</title>
+  <link rel="stylesheet" href="./style.css">
+  <style>
+    .header { padding: 15px; display: flex; align-items: center; gap: 10px; }
+    .header-btn {
+      width: 40px; height: 40px; border-radius: 50%;
+      border: none; background: var(--bg-card);
+      box-shadow: var(--shadow); font-size: 18px; cursor: pointer;
+    }
+    
+    .ranking-container { padding: 20px; }
+    .rank-list { display: flex; flex-direction: column; gap: 10px; }
+    
+    .rank-card {
+      background: var(--bg-card);
+      border-radius: var(--radius);
+      padding: 15px 20px;
+      display: flex;
+      align-items: center;
+      gap: 15px;
+      box-shadow: var(--shadow);
+    }
+    .rank-card.my-rank {
+      border: 2px solid var(--primary);
+      background: rgba(76, 175, 125, 0.05);
+    }
+    
+    .rank-num { font-size: 24px; font-weight: 900; width: 40px; text-align: center; }
+    .rank-num.gold { color: #FFD700; }
+    .rank-num.silver { color: #C0C0C0; }
+    .rank-num.bronze { color: #CD7F32; }
+    .rank-num.other { color: var(--text-secondary); font-size: 18px; }
+    
+    .rank-info { flex: 1; }
+    .rank-name { font-size: 18px; font-weight: 700; }
+    .rank-wins { font-size: 12px; color: var(--text-secondary); }
+    
+    .rank-points { font-size: 20px; font-weight: 900; color: var(--primary); }
+    
+  </style>
+</head>
+<body>
+  <div class="page-bg"></div>
+  
+  <div class="header">
+    <button class="header-btn" onclick="window.location.href='./lobby.html'">🔙</button>
+    <h2 style="font-size: 18px; font-weight: 900;">英雄榜</h2>
+  </div>
+
+  <div class="ranking-container">
+    <div class="rank-list" id="rank-list">
+      <div class="flex-center" style="padding: 40px;">
+        <div class="spinner"></div>
+      </div>
+    </div>
+  </div>
+
+  <script type="module">
+    import { db, ref, onValue } from './firebase.js';
+
+    const uid = localStorage.getItem('wbc_uid');
+    const rankListEl = document.getElementById('rank-list');
+
+    const playersRef = ref(db, 'players');
+    onValue(playersRef, (snapshot) => {
+      const data = snapshot.val();
+      if (!data) {
+        rankListEl.innerHTML = '<p style="text-align:center;">目前還沒有玩家資料</p>';
+        return;
+      }
+
+      // 將玩家資料轉為陣列並依照 points 排序
+      const players = Object.values(data).sort((a, b) => (b.points || 0) - (a.points || 0));
+      
+      let html = '';
+      players.forEach((p, index) => {
+        let rankHtml = '';
+        if (index === 0) rankHtml = '<div class="rank-num gold">🥇</div>';
+        else if (index === 1) rankHtml = '<div class="rank-num silver">🥈</div>';
+        else if (index === 2) rankHtml = '<div class="rank-num bronze">🥉</div>';
+        else rankHtml = `<div class="rank-num other">${index + 1}</div>`;
+        
+        const isMe = p.uid === uid ? 'my-rank' : '';
+        
+        html += `
+          <div class="rank-card ${isMe}">
+            ${rankHtml}
+            <div class="rank-info">
+              <div class="rank-name">${p.nickname || '匿名玩家'}</div>
+              <div class="rank-wins">勝場: ${p.wins || 0}</div>
+            </div>
+            <div class="rank-points">${p.points || 0} pts</div>
+          </div>
+        `;
+      });
+      
+      rankListEl.innerHTML = html;
+    });
+  </script>
+</body>
+</html>

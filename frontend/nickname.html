@@ -1,0 +1,143 @@
+<!DOCTYPE html>
+<html lang="zh-TW">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0">
+  <title>輸入你的暱稱 🏸</title>
+  <link rel="stylesheet" href="./style.css">
+  <style>
+    .nickname-page {
+      flex: 1;
+      display: flex;
+      flex-direction: column;
+      align-items: center;
+      justify-content: center;
+      gap: 24px;
+      padding-top: 20px;
+    }
+    .greet-icon { font-size: 80px; animation: bounce 1.5s ease infinite; }
+    .greet-title { font-size: 28px; font-weight: 900; color: var(--primary); }
+    .greet-sub { font-size: 15px; color: var(--text-secondary); }
+    .input-group { width: 100%; position: relative; }
+    .nickname-input {
+      width: 100%;
+      padding: 18px 20px;
+      font-size: 20px;
+      font-weight: 700;
+      font-family: 'Noto Sans TC', sans-serif;
+      border: 2px solid var(--border);
+      border-radius: var(--radius);
+      background: var(--bg-card);
+      color: var(--text-primary);
+      outline: none;
+      transition: border-color 0.2s;
+      box-shadow: var(--shadow);
+      text-align: center;
+    }
+    .nickname-input:focus { border-color: var(--primary); }
+    .nickname-input::placeholder { color: #BBBBBB; font-weight: 400; }
+    .char-count {
+      position: absolute;
+      right: 16px;
+      bottom: 16px;
+      font-size: 12px;
+      color: var(--text-secondary);
+    }
+    .avatar-preview {
+      width: 80px; height: 80px;
+      border-radius: 50%;
+      background: linear-gradient(135deg, var(--primary), var(--primary-dark));
+      display: flex; align-items: center; justify-content: center;
+      font-size: 36px;
+      box-shadow: 0 8px 24px rgba(76,175,125,0.4);
+      transition: all 0.3s ease;
+      margin-bottom: -8px;
+    }
+    .hint-text { font-size: 13px; color: var(--text-secondary); text-align: center; }
+  </style>
+</head>
+<body>
+  <div class="page-bg"></div>
+  <div class="page">
+    <div style="padding-top: 20px;">
+      <a href="./index.html" style="color:var(--text-secondary); text-decoration:none; font-size:14px;">← 返回</a>
+    </div>
+
+    <div class="nickname-page">
+      <div class="avatar-preview animate-scaleIn" id="avatar-preview">🏸</div>
+
+      <div class="text-center animate-fadeInUp">
+        <h1 class="greet-title">HELLO!</h1>
+        <p class="greet-sub">請輸入你的暱稱</p>
+      </div>
+
+      <div class="input-group animate-fadeInUp anim-delay-1">
+        <input
+          type="text"
+          id="nickname-input"
+          class="nickname-input"
+          placeholder="你的暱稱"
+          maxlength="10"
+          autocomplete="off"
+          autocorrect="off"
+          autocapitalize="off"
+        >
+        <span class="char-count"><span id="char-count">0</span> / 10</span>
+      </div>
+
+      <p class="hint-text animate-fadeInUp anim-delay-2">最多 10 個字 · 大家都會看到喔！</p>
+
+      <div style="width:100%" class="animate-fadeInUp anim-delay-3">
+        <button class="btn btn-primary" id="btn-enter" disabled>
+          ENTER 進入大廳
+        </button>
+      </div>
+
+      <p class="hint-text" style="margin-top: 8px;">
+        🎊 LET'S PLAY! 🎊
+      </p>
+    </div>
+  </div>
+
+  <script type="module">
+    const EMOJIS = ['🏸', '👑', '⚡', '🌸', '🦋', '🎯', '🔥', '🌟', '💪', '🐼'];
+    const input = document.getElementById('nickname-input');
+    const btnEnter = document.getElementById('btn-enter');
+    const charCount = document.getElementById('char-count');
+    const avatarPreview = document.getElementById('avatar-preview');
+
+    input.addEventListener('input', () => {
+      const val = input.value.trim();
+      const len = input.value.length;
+      charCount.textContent = len;
+      btnEnter.disabled = val.length < 1;
+      // Pick emoji based on first char
+      const code = val.charCodeAt(0) || 0;
+      avatarPreview.textContent = EMOJIS[code % EMOJIS.length];
+    });
+
+    btnEnter.addEventListener('click', () => {
+      const nickname = input.value.trim();
+      if (!nickname) return;
+      // Store nickname and generate UID
+      let uid = localStorage.getItem('wbc_uid');
+      if (!uid) {
+        uid = 'uid_' + Date.now() + '_' + Math.random().toString(36).slice(2, 7);
+        localStorage.setItem('wbc_uid', uid);
+      }
+      localStorage.setItem('wbc_nickname', nickname);
+      window.location.href = './lobby.html';
+    });
+
+    // Auto-focus
+    setTimeout(() => input.focus(), 400);
+
+    // Pre-fill if returning player
+    const saved = localStorage.getItem('wbc_nickname');
+    if (saved) {
+      input.value = saved;
+      input.dispatchEvent(new Event('input'));
+    }
+  </script>
+</body>
+</html>

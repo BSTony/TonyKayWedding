@@ -1,0 +1,460 @@
+@import url('https://fonts.googleapis.com/css2?family=Noto+Sans+TC:wght@400;500;700;900&display=swap');
+
+/* ============================
+   Design Tokens
+   ============================ */
+:root {
+  --primary: #4CAF7D;
+  --primary-dark: #3a9c6a;
+  --secondary: #FF6B6B;
+  --secondary-dark: #e05555;
+  --accent: #FFD700;
+  --bg: #F5F0E8;
+  --bg-card: #FFFFFF;
+  --text-primary: #2C2C2C;
+  --text-secondary: #6B6B6B;
+  --text-light: #FFFFFF;
+  --border: #E8E0D5;
+  --shadow: 0 4px 20px rgba(0,0,0,0.1);
+  --shadow-lg: 0 8px 40px rgba(0,0,0,0.15);
+  --radius: 16px;
+  --radius-sm: 8px;
+  --radius-full: 999px;
+
+  /* Shot colors */
+  --drive-color: #4CAF7D;
+  --smash-color: #FF6B6B;
+  --clear-color: #4A9EFF;
+}
+
+/* ============================
+   Reset & Base
+   ============================ */
+*, *::before, *::after { box-sizing: border-box; margin: 0; padding: 0; }
+
+html, body {
+  width: 100%; height: 100%;
+  font-family: 'Noto Sans TC', sans-serif;
+  background: var(--bg);
+  color: var(--text-primary);
+  overflow-x: hidden;
+  -webkit-tap-highlight-color: transparent;
+  user-select: none;
+  -webkit-user-select: none;
+}
+
+/* ============================
+   Utility Classes
+   ============================ */
+.hidden { display: none !important; }
+.flex-center { display: flex; align-items: center; justify-content: center; }
+.flex-col { flex-direction: column; }
+.gap-8 { gap: 8px; }
+.gap-12 { gap: 12px; }
+.gap-16 { gap: 16px; }
+.gap-20 { gap: 20px; }
+.text-center { text-align: center; }
+.w-full { width: 100%; }
+
+/* ============================
+   Page Layout
+   ============================ */
+.page {
+  min-height: 100vh;
+  max-width: 430px;
+  margin: 0 auto;
+  padding: 0 20px 40px;
+  display: flex;
+  flex-direction: column;
+}
+
+/* ============================
+   Background Decoration
+   ============================ */
+.page-bg {
+  position: fixed;
+  top: 0; left: 0; right: 0; bottom: 0;
+  z-index: -1;
+  background: linear-gradient(160deg, #FFF9F0 0%, #F0F7F0 50%, #FFF0F5 100%);
+  pointer-events: none;
+}
+.page-bg::before {
+  content: '';
+  position: absolute;
+  top: -100px; right: -100px;
+  width: 300px; height: 300px;
+  background: radial-gradient(circle, rgba(76,175,125,0.15) 0%, transparent 70%);
+  border-radius: 50%;
+}
+.page-bg::after {
+  content: '';
+  position: absolute;
+  bottom: -80px; left: -80px;
+  width: 250px; height: 250px;
+  background: radial-gradient(circle, rgba(255,107,107,0.12) 0%, transparent 70%);
+  border-radius: 50%;
+}
+
+/* ============================
+   Buttons
+   ============================ */
+.btn {
+  display: block;
+  width: 100%;
+  padding: 16px 24px;
+  border: none;
+  border-radius: var(--radius-full);
+  font-family: 'Noto Sans TC', sans-serif;
+  font-size: 18px;
+  font-weight: 700;
+  cursor: pointer;
+  transition: all 0.15s ease;
+  text-decoration: none;
+  text-align: center;
+  letter-spacing: 0.05em;
+}
+.btn:active { transform: scale(0.97); }
+
+.btn-primary {
+  background: var(--primary);
+  color: var(--text-light);
+  box-shadow: 0 4px 0 var(--primary-dark), 0 6px 15px rgba(76,175,125,0.4);
+}
+.btn-primary:active { box-shadow: 0 2px 0 var(--primary-dark); transform: translateY(2px) scale(0.99); }
+
+.btn-secondary {
+  background: var(--bg-card);
+  color: var(--primary);
+  border: 2px solid var(--primary);
+  box-shadow: var(--shadow);
+}
+
+.btn-danger {
+  background: var(--secondary);
+  color: var(--text-light);
+  box-shadow: 0 4px 0 var(--secondary-dark), 0 6px 15px rgba(255,107,107,0.4);
+}
+.btn-danger:active { box-shadow: 0 2px 0 var(--secondary-dark); transform: translateY(2px) scale(0.99); }
+
+.btn-sm {
+  padding: 10px 20px;
+  font-size: 14px;
+  width: auto;
+  display: inline-block;
+}
+
+/* ============================
+   Cards
+   ============================ */
+.card {
+  background: var(--bg-card);
+  border-radius: var(--radius);
+  padding: 20px;
+  box-shadow: var(--shadow);
+  border: 1px solid var(--border);
+}
+
+/* ============================
+   Avatar
+   ============================ */
+.avatar {
+  width: 60px; height: 60px;
+  border-radius: 50%;
+  background: linear-gradient(135deg, var(--primary), var(--primary-dark));
+  display: flex; align-items: center; justify-content: center;
+  font-size: 28px;
+  box-shadow: 0 4px 12px rgba(76,175,125,0.3);
+  flex-shrink: 0;
+}
+.avatar-lg { width: 80px; height: 80px; font-size: 38px; }
+.avatar-sm { width: 44px; height: 44px; font-size: 20px; }
+
+/* ============================
+   Stats Row
+   ============================ */
+.stats-row {
+  display: flex;
+  gap: 0;
+  border-radius: var(--radius-sm);
+  overflow: hidden;
+  border: 1px solid var(--border);
+}
+.stat-item {
+  flex: 1;
+  text-align: center;
+  padding: 10px 6px;
+  border-right: 1px solid var(--border);
+  background: var(--bg-card);
+}
+.stat-item:last-child { border-right: none; }
+.stat-label {
+  font-size: 10px;
+  color: var(--text-secondary);
+  font-weight: 500;
+  text-transform: uppercase;
+  letter-spacing: 0.05em;
+  margin-bottom: 2px;
+}
+.stat-value {
+  font-size: 20px;
+  font-weight: 900;
+  color: var(--primary);
+}
+
+/* ============================
+   Logo / Brand
+   ============================ */
+.brand-logo {
+  font-size: 13px;
+  font-weight: 700;
+  color: var(--text-secondary);
+  letter-spacing: 0.15em;
+  text-transform: uppercase;
+  display: flex;
+  align-items: center;
+  gap: 8px;
+}
+.brand-logo .heart { color: var(--secondary); }
+
+/* ============================
+   Shot Buttons (Drive / Smash / Clear)
+   ============================ */
+.shot-grid {
+  display: grid;
+  grid-template-columns: repeat(3, 1fr);
+  gap: 12px;
+  margin-top: 12px;
+}
+
+.shot-btn {
+  aspect-ratio: 1;
+  border: none;
+  border-radius: var(--radius);
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  justify-content: center;
+  gap: 8px;
+  cursor: pointer;
+  transition: all 0.15s ease;
+  position: relative;
+  overflow: hidden;
+}
+.shot-btn::after {
+  content: '';
+  position: absolute;
+  inset: 0;
+  background: rgba(255,255,255,0);
+  transition: background 0.1s;
+}
+.shot-btn:active::after { background: rgba(255,255,255,0.2); }
+.shot-btn:active { transform: scale(0.95); }
+
+.shot-btn .shot-icon { font-size: 36px; line-height: 1; }
+.shot-btn .shot-name { font-size: 13px; font-weight: 700; color: white; }
+.shot-btn .shot-desc { font-size: 10px; color: rgba(255,255,255,0.8); }
+
+.shot-drive { background: linear-gradient(135deg, var(--drive-color), #2e7d52); box-shadow: 0 4px 0 #2e7d52, 0 6px 20px rgba(76,175,125,0.4); }
+.shot-smash { background: linear-gradient(135deg, var(--smash-color), #c0392b); box-shadow: 0 4px 0 #c0392b, 0 6px 20px rgba(255,107,107,0.4); }
+.shot-clear { background: linear-gradient(135deg, var(--clear-color), #1a6fcc); box-shadow: 0 4px 0 #1a6fcc, 0 6px 20px rgba(74,158,255,0.4); }
+
+.shot-btn.selected { transform: scale(0.93); opacity: 0.85; }
+.shot-btn.disabled { opacity: 0.4; pointer-events: none; }
+
+/* ============================
+   Timer
+   ============================ */
+.timer-ring {
+  position: relative;
+  width: 80px; height: 80px;
+  display: flex; align-items: center; justify-content: center;
+}
+.timer-ring svg { position: absolute; top: 0; left: 0; transform: rotate(-90deg); }
+.timer-ring .timer-num {
+  font-size: 28px;
+  font-weight: 900;
+  color: var(--text-primary);
+  z-index: 1;
+}
+.timer-ring.urgent .timer-num { color: var(--secondary); animation: pulse 0.5s infinite alternate; }
+
+@keyframes pulse {
+  from { transform: scale(1); }
+  to { transform: scale(1.15); }
+}
+
+/* ============================
+   Score / Health Hearts
+   ============================ */
+.hearts {
+  display: flex;
+  gap: 4px;
+  justify-content: center;
+}
+.heart-icon {
+  font-size: 22px;
+  transition: all 0.3s ease;
+}
+.heart-icon.lost { filter: grayscale(1) opacity(0.3); }
+
+/* ============================
+   Result Reveal
+   ============================ */
+.choice-reveal {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 12px;
+  padding: 20px;
+  background: var(--bg-card);
+  border-radius: var(--radius);
+  border: 1px solid var(--border);
+}
+.choice-reveal .vs-badge {
+  font-size: 20px;
+  font-weight: 900;
+  color: var(--text-secondary);
+  flex-shrink: 0;
+}
+.choice-pill {
+  flex: 1;
+  padding: 12px;
+  border-radius: var(--radius-sm);
+  text-align: center;
+  font-weight: 700;
+  font-size: 14px;
+}
+.choice-pill .choice-emoji { font-size: 30px; display: block; margin-bottom: 4px; }
+.choice-win { background: rgba(76,175,125,0.15); border: 2px solid var(--primary); color: var(--primary); }
+.choice-lose { background: rgba(255,107,107,0.1); border: 2px solid rgba(255,107,107,0.3); color: var(--secondary); }
+.choice-draw { background: rgba(255,215,0,0.15); border: 2px solid rgba(255,215,0,0.5); color: #B8860B; }
+
+/* ============================
+   Rankings
+   ============================ */
+.rank-row {
+  display: flex;
+  align-items: center;
+  gap: 12px;
+  padding: 12px 16px;
+  border-radius: var(--radius-sm);
+  transition: background 0.2s;
+}
+.rank-row:hover { background: rgba(0,0,0,0.02); }
+.rank-row.my-row { background: rgba(76,175,125,0.1); border: 1px solid rgba(76,175,125,0.3); }
+.rank-num {
+  font-size: 18px;
+  font-weight: 900;
+  width: 30px;
+  text-align: center;
+  color: var(--text-secondary);
+}
+.rank-num.gold { color: #FFD700; }
+.rank-num.silver { color: #C0C0C0; }
+.rank-num.bronze { color: #CD7F32; }
+.rank-name { flex: 1; font-size: 15px; font-weight: 700; }
+.rank-points { font-size: 15px; font-weight: 900; color: var(--primary); }
+
+/* ============================
+   Animations
+   ============================ */
+@keyframes fadeInUp {
+  from { opacity: 0; transform: translateY(24px); }
+  to { opacity: 1; transform: translateY(0); }
+}
+@keyframes scaleIn {
+  from { opacity: 0; transform: scale(0.8); }
+  to { opacity: 1; transform: scale(1); }
+}
+@keyframes slideDown {
+  from { opacity: 0; transform: translateY(-20px); }
+  to { opacity: 1; transform: translateY(0); }
+}
+@keyframes shimmer {
+  0% { background-position: -200% center; }
+  100% { background-position: 200% center; }
+}
+@keyframes bounce {
+  0%, 100% { transform: translateY(0); }
+  50% { transform: translateY(-10px); }
+}
+@keyframes spin {
+  to { transform: rotate(360deg); }
+}
+@keyframes heartbeat {
+  0%, 100% { transform: scale(1); }
+  14% { transform: scale(1.3); }
+  28% { transform: scale(1); }
+  42% { transform: scale(1.2); }
+  70% { transform: scale(1); }
+}
+
+.animate-fadeInUp { animation: fadeInUp 0.4s ease both; }
+.animate-scaleIn { animation: scaleIn 0.35s cubic-bezier(0.34,1.56,0.64,1) both; }
+.animate-slideDown { animation: slideDown 0.3s ease both; }
+.animate-bounce { animation: bounce 1.5s ease infinite; }
+.animate-heartbeat { animation: heartbeat 1.5s ease infinite; }
+
+.anim-delay-1 { animation-delay: 0.1s; }
+.anim-delay-2 { animation-delay: 0.2s; }
+.anim-delay-3 { animation-delay: 0.3s; }
+.anim-delay-4 { animation-delay: 0.4s; }
+
+/* ============================
+   Toast Notification
+   ============================ */
+.toast {
+  position: fixed;
+  top: 20px;
+  left: 50%;
+  transform: translateX(-50%) translateY(-80px);
+  background: #2C2C2C;
+  color: white;
+  padding: 12px 24px;
+  border-radius: var(--radius-full);
+  font-size: 14px;
+  font-weight: 700;
+  z-index: 9999;
+  transition: transform 0.3s cubic-bezier(0.34,1.56,0.64,1);
+  white-space: nowrap;
+  pointer-events: none;
+}
+.toast.show { transform: translateX(-50%) translateY(0); }
+
+/* ============================
+   Loading Spinner
+   ============================ */
+.spinner {
+  width: 48px; height: 48px;
+  border: 4px solid var(--border);
+  border-top-color: var(--primary);
+  border-radius: 50%;
+  animation: spin 0.8s linear infinite;
+}
+
+/* ============================
+   Confetti Canvas
+   ============================ */
+#confetti-canvas {
+  position: fixed;
+  top: 0; left: 0;
+  width: 100%; height: 100%;
+  pointer-events: none;
+  z-index: 1000;
+}
+
+/* ============================
+   Shuttlecock Trail
+   ============================ */
+.shuttle-anim {
+  font-size: 48px;
+  display: block;
+  animation: bounce 0.8s ease infinite;
+}
+
+/* ============================
+   Scrollbar
+   ============================ */
+::-webkit-scrollbar { width: 4px; }
+::-webkit-scrollbar-track { background: transparent; }
+::-webkit-scrollbar-thumb { background: var(--border); border-radius: 2px; }

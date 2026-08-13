@@ -1,0 +1,237 @@
+<!DOCTYPE html>
+<html lang="zh-TW">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0">
+  <title>大廳 Lobby 🏸</title>
+  <link rel="stylesheet" href="./style.css">
+  <style>
+    .lobby-header {
+      display: flex;
+      align-items: center;
+      gap: 14px;
+      padding: 20px 0 12px;
+    }
+    .greeting { flex: 1; }
+    .greeting h2 { font-size: 22px; font-weight: 900; }
+    .greeting p { font-size: 13px; color: var(--text-secondary); margin-top: 2px; }
+    .settings-btn {
+      width: 40px; height: 40px;
+      border: none;
+      border-radius: 50%;
+      background: var(--bg-card);
+      cursor: pointer;
+      font-size: 18px;
+      box-shadow: var(--shadow);
+      display: flex; align-items: center; justify-content: center;
+    }
+    .main-cta {
+      background: linear-gradient(135deg, var(--primary), var(--primary-dark));
+      border-radius: var(--radius);
+      padding: 24px 20px;
+      text-align: center;
+      box-shadow: 0 8px 24px rgba(76,175,125,0.4);
+      cursor: pointer;
+      border: none;
+      width: 100%;
+      transition: all 0.15s;
+    }
+    .main-cta:active { transform: scale(0.98); }
+    .main-cta .cta-icon { font-size: 48px; margin-bottom: 8px; display: block; }
+    .main-cta .cta-title { font-size: 22px; font-weight: 900; color: white; display: block; }
+    .main-cta .cta-sub { font-size: 13px; color: rgba(255,255,255,0.8); display: block; margin-top: 4px; }
+    .quick-links {
+      display: grid;
+      grid-template-columns: 1fr 1fr;
+      gap: 12px;
+    }
+    .quick-card {
+      background: var(--bg-card);
+      border-radius: var(--radius);
+      padding: 16px;
+      text-align: center;
+      cursor: pointer;
+      border: 1px solid var(--border);
+      box-shadow: var(--shadow);
+      text-decoration: none;
+      color: inherit;
+      transition: all 0.15s;
+      display: block;
+    }
+    .quick-card:active { transform: scale(0.97); }
+    .quick-card .qc-icon { font-size: 32px; display: block; margin-bottom: 6px; }
+    .quick-card .qc-label { font-size: 13px; font-weight: 700; color: var(--text-secondary); }
+    .quick-card .qc-value { font-size: 20px; font-weight: 900; color: var(--text-primary); }
+    .online-players {
+      display: flex;
+      align-items: center;
+      gap: 8px;
+      font-size: 13px;
+      color: var(--text-secondary);
+    }
+    .online-dot {
+      width: 8px; height: 8px;
+      background: var(--primary);
+      border-radius: 50%;
+      animation: pulse-dot 1.5s ease infinite;
+    }
+    @keyframes pulse-dot {
+      0%, 100% { opacity: 1; transform: scale(1); }
+      50% { opacity: 0.5; transform: scale(0.8); }
+    }
+    .section-title {
+      font-size: 13px;
+      font-weight: 700;
+      color: var(--text-secondary);
+      text-transform: uppercase;
+      letter-spacing: 0.1em;
+      margin-bottom: 8px;
+    }
+  </style>
+</head>
+<body>
+  <div class="page-bg"></div>
+  <div class="page">
+    <!-- Header -->
+    <div class="lobby-header animate-slideDown">
+      <div class="avatar" id="player-avatar">🏸</div>
+      <div class="greeting">
+        <h2>HELLO, <span id="player-name">玩家</span>！</h2>
+        <p>歡迎來到婚禮羽球大賽</p>
+      </div>
+      <button class="settings-btn" onclick="window.location.href='./nickname.html'">⚙️</button>
+    </div>
+
+    <!-- Online Count -->
+    <div class="online-players animate-fadeInUp" style="margin-bottom: 16px;">
+      <div class="online-dot"></div>
+      <span id="online-count">...</span> 位玩家在線上
+    </div>
+
+    <!-- Main CTA -->
+    <button class="main-cta animate-scaleIn" onclick="window.location.href='./game.html'" style="margin-bottom: 16px;">
+      <span class="cta-icon">🏸</span>
+      <span class="cta-title">PLAY MATCH</span>
+      <span class="cta-sub">開始對戰 · 找尋對手</span>
+    </button>
+
+    <!-- Quick links -->
+    <div class="quick-links animate-fadeInUp anim-delay-1" style="margin-bottom: 20px;">
+      <a class="quick-card" href="./ranking.html">
+        <span class="qc-icon">🏆</span>
+        <span class="qc-label">RANKING</span>
+        <span class="qc-label">排行榜</span>
+      </a>
+      <div class="quick-card" id="bride-groom-card">
+        <span class="qc-icon">💍</span>
+        <span class="qc-label">BRIDE & GROOM</span>
+        <span class="qc-label">拯救新人</span>
+      </div>
+    </div>
+
+    <!-- My Stats -->
+    <p class="section-title animate-fadeInUp anim-delay-2">YOUR STATUS</p>
+    <div class="card animate-fadeInUp anim-delay-2" style="margin-bottom: 16px;">
+      <div class="stats-row">
+        <div class="stat-item">
+          <div class="stat-label">RANK</div>
+          <div class="stat-value" id="my-rank">#-</div>
+        </div>
+        <div class="stat-item">
+          <div class="stat-label">POINTS</div>
+          <div class="stat-value" id="my-points">0</div>
+        </div>
+        <div class="stat-item">
+          <div class="stat-label">WINS</div>
+          <div class="stat-value" id="my-wins">0</div>
+        </div>
+      </div>
+    </div>
+
+    <!-- Recent ranking preview -->
+    <p class="section-title animate-fadeInUp anim-delay-3">LIVE RANKING</p>
+    <div class="card animate-fadeInUp anim-delay-3" id="ranking-preview">
+      <div class="flex-center" style="padding: 20px 0;">
+        <div class="spinner"></div>
+      </div>
+    </div>
+  </div>
+
+  <script type="module">
+    import { db, ref, onValue, set, update } from './firebase.js';
+
+    const EMOJIS = ['🏸', '👑', '⚡', '🌸', '🦋', '🎯', '🔥', '🌟', '💪', '🐼'];
+    const uid = localStorage.getItem('wbc_uid');
+    const nickname = localStorage.getItem('wbc_nickname');
+
+    if (!uid || !nickname) {
+      window.location.href = './nickname.html';
+    }
+
+    // Set avatar
+    const code = nickname?.charCodeAt(0) || 0;
+    document.getElementById('player-avatar').textContent = EMOJIS[code % EMOJIS.length];
+    document.getElementById('player-name').textContent = nickname;
+
+    // Register / update player in Firebase
+    const playerRef = ref(db, 'players/' + uid);
+    update(playerRef, {
+      nickname,
+      uid,
+      status: 'lobby',
+      lastSeen: Date.now()
+    });
+
+    // Listen to own player data
+    onValue(playerRef, snap => {
+      const d = snap.val();
+      if (!d) return;
+      document.getElementById('my-points').textContent = d.points || 0;
+      document.getElementById('my-wins').textContent = d.wins || 0;
+    });
+
+    // Count online players
+    const allPlayersRef = ref(db, 'players');
+    onValue(allPlayersRef, snap => {
+      const data = snap.val() || {};
+      const online = Object.values(data).filter(p => Date.now() - (p.lastSeen || 0) < 60000);
+      document.getElementById('online-count').textContent = online.length;
+
+      // Render ranking preview (top 5)
+      const sorted = online.sort((a, b) => (b.points || 0) - (a.points || 0)).slice(0, 5);
+      const rankEl = document.getElementById('ranking-preview');
+      if (sorted.length === 0) {
+        rankEl.innerHTML = '<p style="color:var(--text-secondary);text-align:center;padding:20px;font-size:14px;">快叫朋友一起來玩！</p>';
+        return;
+      }
+      rankEl.innerHTML = sorted.map((p, i) => {
+        const medals = ['🥇', '🥈', '🥉'];
+        const rankClass = i < 3 ? ['gold','silver','bronze'][i] : '';
+        return `<div class="rank-row ${p.uid === uid ? 'my-row' : ''}">
+          <span class="rank-num ${rankClass}">${medals[i] || '#' + (i+1)}</span>
+          <span class="rank-name">${p.nickname}</span>
+          <span class="rank-points">${p.points || 0} pts</span>
+        </div>`;
+      }).join('');
+    });
+
+    // My rank
+    onValue(ref(db, 'players'), snap => {
+      const data = snap.val() || {};
+      const sorted = Object.values(data).sort((a,b) => (b.points||0)-(a.points||0));
+      const myIdx = sorted.findIndex(p => p.uid === uid);
+      document.getElementById('my-rank').textContent = myIdx >= 0 ? '#' + (myIdx + 1) : '#-';
+    });
+
+    // Bride & groom card
+    document.getElementById('bride-groom-card').addEventListener('click', () => {
+      alert('💍 這個功能由主持人開啟！請等待新人的特別挑戰！');
+    });
+
+    // Keep lastSeen alive
+    setInterval(() => {
+      update(playerRef, { lastSeen: Date.now() });
+    }, 15000);
+  </script>
+</body>
+</html>

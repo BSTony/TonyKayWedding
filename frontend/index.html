@@ -1,0 +1,148 @@
+<!DOCTYPE html>
+<html lang="zh-TW">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0">
+  <title>Wedding Badminton Cup 🏸</title>
+  <link rel="stylesheet" href="./style.css">
+  <style>
+    .landing-hero {
+      flex: 1;
+      display: flex;
+      flex-direction: column;
+      align-items: center;
+      justify-content: center;
+      padding-top: 40px;
+      gap: 0;
+    }
+    .couple-illustration {
+      font-size: 90px;
+      line-height: 1;
+      margin-bottom: 8px;
+      filter: drop-shadow(0 8px 16px rgba(0,0,0,0.15));
+    }
+    .title-main {
+      font-size: 32px;
+      font-weight: 900;
+      color: var(--text-primary);
+      text-align: center;
+      line-height: 1.2;
+      letter-spacing: -0.02em;
+    }
+    .title-main .highlight { color: var(--primary); }
+    .title-sub {
+      font-size: 13px;
+      color: var(--text-secondary);
+      text-align: center;
+      letter-spacing: 0.15em;
+      text-transform: uppercase;
+      margin-top: 4px;
+      margin-bottom: 24px;
+    }
+    .couple-names {
+      display: flex;
+      align-items: center;
+      gap: 10px;
+      background: var(--bg-card);
+      padding: 10px 20px;
+      border-radius: var(--radius-full);
+      box-shadow: var(--shadow);
+      margin-bottom: 40px;
+      font-size: 18px;
+      font-weight: 700;
+    }
+    .couple-names .name-bride { color: var(--secondary); }
+    .couple-names .name-groom { color: var(--primary); }
+    .couple-names .heart { color: var(--secondary); font-size: 22px; animation: heartbeat 1.5s ease infinite; }
+    .actions {
+      width: 100%;
+      display: flex;
+      flex-direction: column;
+      gap: 12px;
+      margin-bottom: 32px;
+    }
+    .shuttle-deco {
+      position: absolute;
+      font-size: 24px;
+      opacity: 0.25;
+      pointer-events: none;
+    }
+    .flying-balls {
+      position: fixed;
+      top: 0; left: 0; right: 0; bottom: 0;
+      pointer-events: none;
+      z-index: -1;
+      overflow: hidden;
+    }
+    .ball {
+      position: absolute;
+      font-size: 20px;
+      opacity: 0.12;
+      animation: floatBall linear infinite;
+    }
+    @keyframes floatBall {
+      from { transform: translateY(110vh) rotate(0deg); }
+      to { transform: translateY(-20px) rotate(360deg); }
+    }
+    .footer-note {
+      font-size: 12px;
+      color: var(--text-secondary);
+      text-align: center;
+      padding-bottom: 20px;
+    }
+  </style>
+</head>
+<body>
+  <div class="page-bg"></div>
+  <div class="flying-balls" id="floating-balls"></div>
+
+  <div class="page">
+    <div class="landing-hero">
+      <div class="brand-logo animate-slideDown" style="margin-bottom: 24px; margin-top: 20px;">
+        <span>🏸</span> WEDDING BADMINTON CUP <span class="heart">♥</span>
+      </div>
+
+      <div class="couple-illustration animate-bounce">🎭</div>
+
+      <h1 class="title-main animate-fadeInUp">
+        <span class="highlight">TONY</span> ♥ <span class="highlight" style="color:var(--secondary)">KAY</span><br>婚禮羽球大賽
+      </h1>
+      <p class="title-sub animate-fadeInUp anim-delay-1">來打一場吧！</p>
+
+      <div class="couple-names animate-scaleIn anim-delay-2">
+        <span class="name-groom">新郎</span>
+        <span class="heart">❤</span>
+        <span class="name-bride">新娘</span>
+        <span style="color:var(--text-secondary); font-size:13px; margin-left:8px;">的婚禮紀念賽</span>
+      </div>
+
+      <div class="actions animate-fadeInUp anim-delay-3">
+        <a href="./nickname.html" class="btn btn-primary" id="btn-start">
+          🏸 START GAME
+        </a>
+        <a href="./ranking.html" class="btn btn-secondary">
+          🏆 RANKING 排行榜
+        </a>
+      </div>
+    </div>
+
+    <p class="footer-note">掃描 QR Code 加入對戰 · 祝新婚快樂 💍</p>
+  </div>
+
+  <script type="module">
+    // Floating shuttlecocks animation
+    const balls = ['🏸', '💍', '🎊', '🌸', '💕'];
+    const container = document.getElementById('floating-balls');
+    for (let i = 0; i < 15; i++) {
+      const el = document.createElement('div');
+      el.className = 'ball';
+      el.textContent = balls[i % balls.length];
+      el.style.left = Math.random() * 100 + '%';
+      el.style.animationDuration = (8 + Math.random() * 12) + 's';
+      el.style.animationDelay = -(Math.random() * 15) + 's';
+      el.style.fontSize = (14 + Math.random() * 16) + 'px';
+      container.appendChild(el);
+    }
+  </script>
+</body>
+</html>
