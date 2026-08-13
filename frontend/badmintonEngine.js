@@ -49,7 +49,8 @@ export class BadmintonEngine {
       isLeft: isLeft,
       color: isLeft ? '#4facfe' : '#ff0844',
       isSwinging: false,
-      swingTimer: 0
+      swingTimer: 0,
+      targetX: null // 新增目標 X 座標
     };
   }
 
@@ -97,10 +98,22 @@ export class BadmintonEngine {
   update() {
     if (!this.isRunning) return;
 
-    // Player Movement
-    if (this.keys.left) this.player.vx = -this.player.speed;
-    else if (this.keys.right) this.player.vx = this.player.speed;
-    else this.player.vx *= 0.8;
+    // Player Movement (混合按鍵與點擊目標移動)
+    if (this.player.targetX !== null) {
+      if (Math.abs(this.player.x - this.player.targetX) <= this.player.speed) {
+        this.player.x = this.player.targetX;
+        this.player.vx = 0;
+        this.player.targetX = null; // 到達目標
+      } else if (this.player.x < this.player.targetX) {
+        this.player.vx = this.player.speed;
+      } else {
+        this.player.vx = -this.player.speed;
+      }
+    } else {
+      if (this.keys.left) this.player.vx = -this.player.speed;
+      else if (this.keys.right) this.player.vx = this.player.speed;
+      else this.player.vx *= 0.8;
+    }
 
     this.player.x += this.player.vx;
     

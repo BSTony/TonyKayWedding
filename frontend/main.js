@@ -54,18 +54,19 @@ function startRealBadmintonMode() {
     gameEngine = new BadmintonEngine('game-canvas');
     
     // Bind Controls
-    const btnLeft = document.getElementById('btn-left');
-    const btnRight = document.getElementById('btn-right');
     const btnHit = document.getElementById('btn-hit');
+    const gameCanvas = document.getElementById('game-canvas');
     
-    const bindBtn = (btn, key, val) => {
-      btn.addEventListener('pointerdown', (e) => { e.preventDefault(); gameEngine.keys[key] = val; });
-      btn.addEventListener('pointerup', (e) => { e.preventDefault(); gameEngine.keys[key] = !val; });
-      btn.addEventListener('pointerleave', (e) => { e.preventDefault(); gameEngine.keys[key] = !val; });
-    };
-    
-    bindBtn(btnLeft, 'left', true);
-    bindBtn(btnRight, 'right', true);
+    // 點擊畫布設定目標位置
+    gameCanvas.addEventListener('pointerdown', (e) => {
+      e.preventDefault();
+      const rect = gameCanvas.getBoundingClientRect();
+      const clickX = e.clientX - rect.left;
+      
+      // 根據 Canvas 縮放比例計算真實 X 座標
+      const scaleX = gameEngine.canvas.width / rect.width;
+      gameEngine.player.targetX = clickX * scaleX;
+    });
     
     btnHit.addEventListener('pointerdown', (e) => {
       e.preventDefault();
