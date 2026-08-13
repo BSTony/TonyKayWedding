@@ -69,29 +69,81 @@
     #tap-btn:active { transform: scale(0.95); }
     #tap-btn:disabled { opacity: 0.5; cursor: not-allowed; transform: none; }
     
-    /* 對戰電腦專屬 */
+    /* 對戰電腦專屬 (皮卡丘排球版) */
     .vs-computer-board { display: none; }
-    .canvas-container { display: none; width: 100%; height: 50vh; background: #e0f7fa; position: relative; overflow: hidden; border-radius: 10px; margin-bottom: 10px; box-shadow: inset 0 0 10px rgba(0,0,0,0.1); }
-    canvas { display: block; width: 100%; height: 100%; }
-    .controls { display: none; padding: 10px 20px; gap: 15px; }
-    .controls .dpad { display: flex; gap: 10px; flex: 1; }
-    .controls .action { flex: 1; display: flex; justify-content: flex-end; }
-    .btn-control { 
-      background: var(--bg-card); border: none; box-shadow: 0 4px 10px rgba(0,0,0,0.15);
-      border-radius: 12px; font-size: 24px; color: var(--primary); font-weight: 900;
+    
+    /* 當進入電腦模式時，強制全螢幕覆蓋 */
+    #screen-game.mode-computer {
+      position: fixed; top: 0; left: 0; width: 100vw; height: 100vh;
+      background: #000; z-index: 9999;
+      display: flex; justify-content: center; align-items: center;
+    }
+    
+    /* 如果是直向，提示轉橫向 */
+    .rotate-prompt {
+      display: none; position: absolute; top: 0; left: 0; width: 100%; height: 100%;
+      background: rgba(0,0,0,0.9); color: white; flex-direction: column;
+      align-items: center; justify-content: center; z-index: 10000;
+      font-size: 24px; font-weight: bold; text-align: center; padding: 20px;
+    }
+    @media screen and (orientation: portrait) {
+      #screen-game.mode-computer .rotate-prompt { display: flex; }
+      #screen-game.mode-computer .game-ui { display: none !important; }
+    }
+    
+    /* 遊戲主要介面 */
+    .game-ui {
+      position: relative; width: 100%; height: 100%; display: none;
+    }
+    #screen-game.mode-computer .game-ui { display: block; }
+    
+    /* 畫布 */
+    .canvas-container { position: absolute; top: 0; left: 0; width: 100%; height: 100%; }
+    canvas { display: block; width: 100%; height: 100%; background: #e0f7fa; }
+    
+    /* 橫向分數板 */
+    .score-board.vs-computer-board {
+      position: absolute; top: 10px; left: 50%; transform: translateX(-50%);
+      display: flex; gap: 30px; background: rgba(255,255,255,0.8);
+      padding: 5px 20px; border-radius: 20px; box-shadow: 0 4px 10px rgba(0,0,0,0.2);
+      z-index: 10; margin: 0;
+    }
+    
+    /* 虛擬手把 (浮在畫面上) */
+    .controls {
+      position: absolute; bottom: 10px; left: 0; width: 100%;
+      display: flex; justify-content: space-between; padding: 0 20px; z-index: 20;
+      pointer-events: none; /* 讓點擊穿透到按鈕 */
+    }
+    
+    /* 左邊：殺球按鈕 */
+    .controls .action { display: flex; align-items: flex-end; pointer-events: auto; }
+    .btn-hit { 
+      width: 100px; height: 100px; border-radius: 50%;
+      background: rgba(255, 8, 68, 0.5); border: 2px solid rgba(255,255,255,0.5);
+      color: white; font-size: 20px; font-weight: bold;
       display: flex; align-items: center; justify-content: center;
       user-select: none; touch-action: manipulation;
     }
-    .btn-control:active { transform: scale(0.92); background: #eee; }
-    .btn-dir { width: 60px; height: 60px; }
-    .btn-hit { width: 100px; height: 60px; background: linear-gradient(135deg, var(--primary), #00f2fe); color: white; border-radius: 20px;}
-    .btn-hit:active { background: var(--primary-dark); }
+    .btn-hit:active { background: rgba(255, 8, 68, 0.8); transform: scale(0.95); }
     
-    #screen-game.mode-computer .vs-computer-board { display: flex; }
-    #screen-game.mode-computer .global-board { display: none; }
-    #screen-game.mode-computer .tap-area { display: none; }
-    #screen-game.mode-computer .canvas-container { display: block; }
-    #screen-game.mode-computer .controls { display: flex; }
+    /* 右邊：十字鍵 */
+    .controls .dpad {
+      display: grid; grid-template-columns: 60px 60px 60px; grid-template-rows: 60px 60px 60px;
+      gap: 5px; pointer-events: auto; opacity: 0.7;
+    }
+    .btn-dir {
+      background: rgba(255,255,255,0.5); border: 1px solid rgba(0,0,0,0.2);
+      border-radius: 10px; font-size: 24px; display: flex; align-items: center; justify-content: center;
+      user-select: none; touch-action: manipulation; color: #000;
+    }
+    .btn-dir:active { background: rgba(255,255,255,0.8); transform: scale(0.95); }
+    #btn-up { grid-column: 2; grid-row: 1; }
+    #btn-left { grid-column: 1; grid-row: 2; }
+    #btn-right { grid-column: 3; grid-row: 2; }
+    #btn-down { grid-column: 2; grid-row: 3; }
+    
+    #screen-game.mode-computer .global-board, #screen-game.mode-computer .game-header, #screen-game.mode-computer .tap-area { display: none; }
     
   </style>
 </head>
@@ -118,8 +170,8 @@
         加入 新娘隊
       </button>
       <button class="btn-team computer" data-team="computer">
-        <span style="font-size: 40px;">🏸</span>
-        真實羽球對戰 (電腦)
+        <span style="font-size: 40px;">🏐</span>
+        皮卡丘打排球 (單機版)
       </button>
     </div>
   </div>
@@ -139,30 +191,42 @@
       </div>
     </div>
     
-    <!-- 對戰電腦分數版 (新邏輯) -->
-    <div class="score-board vs-computer-board" style="margin-bottom: 10px;">
-      <div class="score-col">
-        <div class="score-label">玩家 (Player)</div>
-        <div class="score-val me" id="my-score-vs">0</div>
-      </div>
-      <div class="score-col" style="display:flex;align-items:center;font-weight:900;color:var(--border);">
-        WIN 5
-      </div>
-      <div class="score-col">
-        <div class="score-label">電腦 (Bot)</div>
-        <div class="score-val comp" id="comp-score-vs">0</div>
-      </div>
-    </div>
-
-    <!-- 真實羽球遊戲畫布 (僅電腦模式顯示) -->
-    <div class="canvas-container animate-scaleIn">
-      <canvas id="game-canvas"></canvas>
+    <!-- 皮卡丘打排球 (全螢幕模式) -->
+    <div class="rotate-prompt">
+      <div style="font-size: 50px;">🔄</div>
+      <div>請將手機轉為橫向<br>以進行遊戲</div>
     </div>
     
-    <!-- 真實羽球控制器 (僅電腦模式顯示) -->
-    <div class="controls animate-fadeInUp">
-      <div class="action" style="flex:1;">
-        <button class="btn-control btn-hit" id="btn-hit" style="width: 100%; height: 80px; font-size: 28px;">揮拍 / 殺球 🏸</button>
+    <div class="game-ui">
+      <!-- 畫布 -->
+      <div class="canvas-container">
+        <canvas id="game-canvas"></canvas>
+      </div>
+      
+      <!-- 橫向分數板 -->
+      <div class="score-board vs-computer-board">
+        <div class="score-col">
+          <div class="score-val me" id="my-score-vs" style="font-size:24px;">0</div>
+        </div>
+        <div class="score-col" style="display:flex;align-items:center;font-weight:900;font-size:12px;">
+          WIN 5
+        </div>
+        <div class="score-col">
+          <div class="score-val comp" id="comp-score-vs" style="font-size:24px;">0</div>
+        </div>
+      </div>
+      
+      <!-- 虛擬手把 -->
+      <div class="controls">
+        <div class="action">
+          <button class="btn-hit" id="btn-hit">殺球/跳</button>
+        </div>
+        <div class="dpad">
+          <button class="btn-dir" id="btn-up">⬆️</button>
+          <button class="btn-dir" id="btn-left">⬅️</button>
+          <button class="btn-dir" id="btn-right">➡️</button>
+          <button class="btn-dir" id="btn-down">⬇️</button>
+        </div>
       </div>
     </div>
 

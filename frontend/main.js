@@ -54,19 +54,24 @@ function startRealBadmintonMode() {
     gameEngine = new BadmintonEngine('game-canvas');
     
     // Bind Controls
+    const btnUp = document.getElementById('btn-up');
+    const btnDown = document.getElementById('btn-down');
+    const btnLeft = document.getElementById('btn-left');
+    const btnRight = document.getElementById('btn-right');
     const btnHit = document.getElementById('btn-hit');
-    const gameCanvas = document.getElementById('game-canvas');
     
-    // 點擊畫布設定目標位置
-    gameCanvas.addEventListener('pointerdown', (e) => {
-      e.preventDefault();
-      const rect = gameCanvas.getBoundingClientRect();
-      const clickX = e.clientX - rect.left;
-      
-      // 根據 Canvas 縮放比例計算真實 X 座標
-      const scaleX = gameEngine.canvas.width / rect.width;
-      gameEngine.player.targetX = clickX * scaleX;
-    });
+    const bindBtn = (btn, key, val) => {
+      if (!btn) return;
+      btn.addEventListener('pointerdown', (e) => { e.preventDefault(); gameEngine.keys[key] = val; });
+      btn.addEventListener('pointerup', (e) => { e.preventDefault(); gameEngine.keys[key] = !val; });
+      btn.addEventListener('pointerleave', (e) => { e.preventDefault(); gameEngine.keys[key] = !val; });
+    };
+    
+    bindBtn(btnUp, 'up', true);
+    bindBtn(btnDown, 'down', true);
+    bindBtn(btnLeft, 'left', true);
+    bindBtn(btnRight, 'right', true);
+    bindBtn(btnHit, 'hit', true); // Hit can also be a held key for spiking
     
     btnHit.addEventListener('pointerdown', (e) => {
       e.preventDefault();
