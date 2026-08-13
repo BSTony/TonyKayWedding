@@ -14,9 +14,9 @@ export class BadmintonEngine {
     
     this.maxScore = 5; // First to 5 wins
 
-    // Physics constants
-    this.gravity = 0.5;
-    this.friction = 0.98;
+    // Physics constants (調降重力讓球飛慢一點)
+    this.gravity = 0.15;
+    this.friction = 0.99;
 
     // Entities
     this.player = this.createPlayer(true);
@@ -45,7 +45,7 @@ export class BadmintonEngine {
       height: 60,
       vx: 0,
       vy: 0,
-      speed: 5,
+      speed: 6, // 加快人物移動速度
       isLeft: isLeft,
       color: isLeft ? '#4facfe' : '#ff0844',
       isSwinging: false,
@@ -86,10 +86,11 @@ export class BadmintonEngine {
   }
 
   serve(playerServes) {
+    // 發球時把球拋高，給玩家反應時間
     this.ball.x = playerServes ? this.player.x : this.computer.x;
-    this.ball.y = this.player.y - 50;
+    this.ball.y = this.player.y - 60;
     this.ball.vx = 0;
-    this.ball.vy = 0;
+    this.ball.vy = -6; // 往上拋
     this.ball.active = true;
   }
 
@@ -120,20 +121,18 @@ export class BadmintonEngine {
     // AI Logic (Simple tracking)
     const targetX = this.ball.x > this.net.x ? this.ball.x : this.canvas.width - 50;
     
-    // AI moves towards ball if it's on its side
-    if (this.computer.x < targetX - 10) this.computer.vx = this.computer.speed * 0.8;
-    else if (this.computer.x > targetX + 10) this.computer.vx = -this.computer.speed * 0.8;
+    if (this.computer.x < targetX - 10) this.computer.vx = this.computer.speed * 0.7;
+    else if (this.computer.x > targetX + 10) this.computer.vx = -this.computer.speed * 0.7;
     else this.computer.vx *= 0.8;
 
     this.computer.x += this.computer.vx;
     
-    // AI Boundary
     if (this.computer.x < this.net.x + this.net.width) this.computer.x = this.net.x + this.net.width;
     if (this.computer.x > this.canvas.width) this.computer.x = this.canvas.width;
 
-    // AI Hit Logic
-    if (this.ball.x > this.net.x && this.ball.y > this.computer.y - 60 && this.ball.y < this.computer.y + 20) {
-      if (Math.abs(this.ball.x - this.computer.x) < 40 && !this.computer.isSwinging) {
+    // AI Hit Logic (大幅放寬 AI 擊球判定)
+    if (this.ball.x > this.net.x && this.ball.y > this.computer.y - 120 && this.ball.y < this.computer.y + 40) {
+      if (Math.abs(this.ball.x - this.computer.x) < 80 && !this.computer.isSwinging && this.ball.vy > 0) {
         this.hitBall(this.computer);
       }
     }
@@ -165,10 +164,10 @@ export class BadmintonEngine {
         // Determine winner of rally
         if (this.ball.x < this.net.x) {
           this.compScore++;
-          setTimeout(() => this.serve(false), 1000);
+          setTimeout(() => this.serve(false), 1500); // 延長發球間隔讓玩家準備
         } else {
           this.playerScore++;
-          setTimeout(() => this.serve(true), 1000);
+          setTimeout(() => this.serve(true), 1500);
         }
         
         if (this.onScoreUpdate) this.onScoreUpdate(this.playerScore, this.compScore);
@@ -189,24 +188,24 @@ export class BadmintonEngine {
   playerHit() {
     if (!this.isRunning) return;
     this.player.isSwinging = true;
-    this.player.swingTimer = 10;
+    this.player.swingTimer = 15; // 延長揮拍動畫
     
-    // Check distance to ball
-    const dx = this.ball.x - this.player.x;
+    // 放寬玩家擊球判定：只要球在玩家附近 (X 距離 100，Y 在頭頂附近) 就一定打得到
+    const dx = Math.abs(this.ball.x - this.player.x);
     const dy = this.ball.y - this.player.y;
-    const dist = Math.sqrt(dx*dx + dy*dy);
     
-    if (dist < 80) {
+    // 如果球在玩家前方/後方不遠，且高度不會太低
+    if (dx < 100 && dy > -150 && dy < 50) {
       this.hitBall(this.player);
     }
   }
 
   hitBall(hitter) {
     hitter.isSwinging = true;
-    hitter.swingTimer = 10;
+    hitter.swingTimer = 15;
     
-    // Add velocity towards opponent side
-    const hitPowerX = 12 + Math.random() * 4;
+    // 打高遠球，確保一定過網
+    const hitPowerX = 10 + Math.random() * 3;
     const hitPowerY = -12 - Math.random() * 3;
     
     if (hitter.isLeft) {
@@ -217,8 +216,7 @@ export class BadmintonEngine {
       this.ball.vy = hitPowerY;
     }
     
-    // Prevent ball getting stuck behind player
-    this.ball.x = hitter.isLeft ? hitter.x + 20 : hitter.x - 20;
+    // 強制把球拉回拍子高度再飛出，避免穿模
     this.ball.y = hitter.y - 40;
   }
 
