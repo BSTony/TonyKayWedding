@@ -101,47 +101,62 @@
     .canvas-container { position: absolute; top: 0; left: 0; width: 100%; height: 100%; }
     canvas { display: block; width: 100%; height: 100%; background: #e0f7fa; }
     
-    /* 橫向分數板 */
+    /* 橫向分數板 (黑底黃字復古風) */
     .score-board.vs-computer-board {
-      position: absolute; top: 10px; left: 50%; transform: translateX(-50%);
-      display: flex; gap: 30px; background: rgba(255,255,255,0.8);
-      padding: 5px 20px; border-radius: 20px; box-shadow: 0 4px 10px rgba(0,0,0,0.2);
-      z-index: 10; margin: 0;
+      position: absolute; top: 15px; left: 50%; transform: translateX(-50%);
+      display: flex; gap: 30px; background: transparent;
+      padding: 5px 20px; z-index: 10; margin: 0;
+      font-family: 'Press Start 2P', cursive; color: #facc15;
     }
     
-    /* 虛擬手把 (浮在畫面上) */
+    /* 虛擬手把 (GameBoy 風格) */
     .controls {
-      position: absolute; bottom: 10px; left: 0; width: 100%;
-      display: flex; justify-content: space-between; padding: 0 20px; z-index: 20;
+      position: absolute; bottom: 20px; left: 0; width: 100%;
+      display: flex; justify-content: space-between; padding: 0 40px; z-index: 20;
       pointer-events: none; /* 讓點擊穿透到按鈕 */
     }
     
-    /* 左邊：殺球按鈕 */
+    /* 左邊：殺球按鈕 (經典紅色大圓鈕) */
     .controls .action { display: flex; align-items: flex-end; pointer-events: auto; }
     .btn-hit { 
-      width: 100px; height: 100px; border-radius: 50%;
-      background: rgba(255, 8, 68, 0.5); border: 2px solid rgba(255,255,255,0.5);
-      color: white; font-size: 20px; font-weight: bold;
+      width: 80px; height: 80px; border-radius: 50%;
+      background: #dc2626; border: 4px solid #7f1d1d;
+      color: white; font-size: 14px; font-weight: bold; font-family: 'Press Start 2P', cursive;
       display: flex; align-items: center; justify-content: center;
       user-select: none; touch-action: manipulation;
+      box-shadow: 2px 4px 0 #450a0a, inset -2px -2px 0 rgba(0,0,0,0.2);
+      text-shadow: 1px 1px 0 #000;
     }
-    .btn-hit:active { background: rgba(255, 8, 68, 0.8); transform: scale(0.95); }
+    .btn-hit:active { transform: translateY(4px); box-shadow: 0px 0px 0 #450a0a; }
     
-    /* 右邊：十字鍵 */
+    /* 右邊：十字鍵 (經典黑色十字) */
     .controls .dpad {
-      display: grid; grid-template-columns: 60px 60px 60px; grid-template-rows: 60px 60px 60px;
-      gap: 5px; pointer-events: auto; opacity: 0.7;
+      display: grid; grid-template-columns: 50px 50px 50px; grid-template-rows: 50px 50px 50px;
+      gap: 0; pointer-events: auto; opacity: 0.8;
     }
     .btn-dir {
-      background: rgba(255,255,255,0.5); border: 1px solid rgba(0,0,0,0.2);
-      border-radius: 10px; font-size: 24px; display: flex; align-items: center; justify-content: center;
-      user-select: none; touch-action: manipulation; color: #000;
+      background: #333; border: none;
+      display: flex; align-items: center; justify-content: center;
+      user-select: none; touch-action: manipulation; color: transparent; /* 隱藏箭頭符號 */
+      position: relative;
     }
-    .btn-dir:active { background: rgba(255,255,255,0.8); transform: scale(0.95); }
-    #btn-up { grid-column: 2; grid-row: 1; }
-    #btn-left { grid-column: 1; grid-row: 2; }
-    #btn-right { grid-column: 3; grid-row: 2; }
-    #btn-down { grid-column: 2; grid-row: 3; }
+    .btn-dir:active { background: #111; }
+    
+    /* 偽十字外觀 */
+    #btn-up { grid-column: 2; grid-row: 1; border-radius: 8px 8px 0 0; box-shadow: inset 2px 2px 0 rgba(255,255,255,0.1); }
+    #btn-left { grid-column: 1; grid-row: 2; border-radius: 8px 0 0 8px; box-shadow: inset 2px -2px 0 rgba(255,255,255,0.1); }
+    #btn-right { grid-column: 3; grid-row: 2; border-radius: 0 8px 8px 0; box-shadow: inset -2px -2px 0 rgba(0,0,0,0.4); }
+    #btn-down { grid-column: 2; grid-row: 3; border-radius: 0 0 8px 8px; box-shadow: inset 0 -2px 0 rgba(0,0,0,0.4); }
+    
+    /* 十字中心裝飾 */
+    .dpad-center {
+      grid-column: 2; grid-row: 2; background: #333;
+      display: flex; align-items: center; justify-content: center;
+    }
+    .dpad-center::after {
+      content: ''; width: 20px; height: 20px; border-radius: 50%;
+      background: #111;
+    }
     
     #screen-game.mode-computer .global-board, #screen-game.mode-computer .game-header, #screen-game.mode-computer .tap-area { display: none; }
     
@@ -170,8 +185,8 @@
         加入 新娘隊
       </button>
       <button class="btn-team computer" data-team="computer">
-        <span style="font-size: 40px;">🏐</span>
-        皮卡丘打排球 (單機版)
+        <span style="font-size: 40px;">🎮</span>
+        皮卡丘打排球 (經典版)
       </button>
     </div>
   </div>
@@ -194,7 +209,7 @@
     <!-- 皮卡丘打排球 (全螢幕模式) -->
     <div class="rotate-prompt">
       <div style="font-size: 50px;">🔄</div>
-      <div>請將手機轉為橫向<br>以進行遊戲</div>
+      <div style="font-family: 'Press Start 2P', cursive; font-size: 12px; margin-top:20px; line-height:2;">PLEASE ROTATE<br>YOUR DEVICE</div>
     </div>
     
     <div class="game-ui">
@@ -206,24 +221,25 @@
       <!-- 橫向分數板 -->
       <div class="score-board vs-computer-board">
         <div class="score-col">
-          <div class="score-val me" id="my-score-vs" style="font-size:24px;">0</div>
+          <div class="score-val me" id="my-score-vs" style="font-size:32px; color: #facc15;">0</div>
         </div>
-        <div class="score-col" style="display:flex;align-items:center;font-weight:900;font-size:12px;">
-          WIN 5
+        <div class="score-col" style="display:flex;align-items:center;font-size:12px; color: #fff;">
+          -
         </div>
         <div class="score-col">
-          <div class="score-val comp" id="comp-score-vs" style="font-size:24px;">0</div>
+          <div class="score-val comp" id="comp-score-vs" style="font-size:32px; color: #facc15;">0</div>
         </div>
       </div>
       
       <!-- 虛擬手把 -->
       <div class="controls">
         <div class="action">
-          <button class="btn-hit" id="btn-hit">殺球/跳</button>
+          <button class="btn-hit" id="btn-hit">A</button>
         </div>
         <div class="dpad">
           <button class="btn-dir" id="btn-up">⬆️</button>
           <button class="btn-dir" id="btn-left">⬅️</button>
+          <div class="dpad-center"></div>
           <button class="btn-dir" id="btn-right">➡️</button>
           <button class="btn-dir" id="btn-down">⬇️</button>
         </div>

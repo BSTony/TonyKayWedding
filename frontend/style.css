@@ -1,5 +1,6 @@
-@import url('https://fonts.googleapis.com/css2?family=Noto+Sans+TC:wght@400;500;700;900&display=swap');
+@import url('https://fonts.googleapis.com/css2?family=Press+Start+2P&family=Noto+Sans+TC:wght@400;500;700;900&display=swap');
 
+.font-pixel { font-family: 'Press Start 2P', cursive; }
 /* ============================
    Design Tokens
    ============================ */

@@ -301,40 +301,158 @@ export class BadmintonEngine {
   }
 
   draw() {
-    this.ctx.clearRect(0, 0, this.canvas.width, this.canvas.height);
+    // 經典黑底
+    this.ctx.fillStyle = '#000000';
+    this.ctx.fillRect(0, 0, this.canvas.width, this.canvas.height);
 
-    // Ground
-    this.ctx.fillStyle = '#81c784';
-    this.ctx.fillRect(0, this.groundY, this.canvas.width, this.canvas.height - this.groundY);
+    // 經典黃色地板 (帶紅邊)
+    this.ctx.fillStyle = '#ef4444'; // 紅邊
+    this.ctx.fillRect(0, this.groundY, this.canvas.width, 4);
+    this.ctx.fillStyle = '#facc15'; // 黃地板
+    this.ctx.fillRect(0, this.groundY + 4, this.canvas.width, this.canvas.height - this.groundY - 4);
 
-    // Net
-    this.ctx.fillStyle = '#333';
-    this.ctx.fillRect(this.net.x, this.net.y, this.net.width, this.net.height);
+    // 經典灰色球柱 (紅頭)
+    this.ctx.fillStyle = '#ef4444';
+    this.ctx.fillRect(this.net.x, this.net.y, this.net.width, 10);
+    this.ctx.fillStyle = '#9ca3af';
+    this.ctx.fillRect(this.net.x, this.net.y + 10, this.net.width, this.net.height - 10);
 
-    const drawPlayer = (p) => {
-      this.ctx.fillStyle = p.color;
-      this.ctx.fillRect(p.x, p.y, p.width, p.height);
+    const drawPikachu = (p) => {
+      this.ctx.save();
+      this.ctx.translate(p.x + p.width/2, p.y + p.height/2);
       
+      // 如果在殺球，身體傾斜
       if (p.isSwinging) {
-        this.ctx.fillStyle = '#fff';
-        if (p.isLeft) {
-          this.ctx.fillRect(p.x + p.width, p.y + 10, 20, 10);
-        } else {
-          this.ctx.fillRect(p.x - 20, p.y + 10, 20, 10);
-        }
+        this.ctx.rotate(p.isLeft ? 0.3 : -0.3);
       }
+
+      // 尾巴 (簡化閃電狀)
+      this.ctx.fillStyle = '#eab308';
+      this.ctx.beginPath();
+      if (p.isLeft) {
+        this.ctx.moveTo(-p.width/2, 10);
+        this.ctx.lineTo(-p.width/2 - 15, 0);
+        this.ctx.lineTo(-p.width/2 - 10, -10);
+        this.ctx.lineTo(-p.width/2 - 25, -25);
+      } else {
+        this.ctx.moveTo(p.width/2, 10);
+        this.ctx.lineTo(p.width/2 + 15, 0);
+        this.ctx.lineTo(p.width/2 + 10, -10);
+        this.ctx.lineTo(p.width/2 + 25, -25);
+      }
+      this.ctx.lineWidth = 4;
+      this.ctx.strokeStyle = '#000';
+      this.ctx.stroke();
+      this.ctx.fill();
+
+      // 身體 (黃色圓角矩形)
+      this.ctx.fillStyle = '#fde047';
+      this.ctx.beginPath();
+      this.ctx.roundRect(-p.width/2, -p.height/2, p.width, p.height, 10);
+      this.ctx.fill();
+      this.ctx.lineWidth = 2;
+      this.ctx.strokeStyle = '#000';
+      this.ctx.stroke();
+
+      // 耳朵
+      this.ctx.fillStyle = '#fde047';
+      this.ctx.beginPath();
+      if (p.isLeft) {
+        this.ctx.moveTo(0, -p.height/2);
+        this.ctx.lineTo(15, -p.height/2 - 20);
+        this.ctx.lineTo(15, -p.height/2);
+      } else {
+        this.ctx.moveTo(0, -p.height/2);
+        this.ctx.lineTo(-15, -p.height/2 - 20);
+        this.ctx.lineTo(-15, -p.height/2);
+      }
+      this.ctx.fill();
+      this.ctx.stroke();
+      
+      // 耳尖黑斑
+      this.ctx.fillStyle = '#000';
+      this.ctx.beginPath();
+      if (p.isLeft) {
+        this.ctx.moveTo(10, -p.height/2 - 13);
+        this.ctx.lineTo(15, -p.height/2 - 20);
+        this.ctx.lineTo(15, -p.height/2 - 5);
+      } else {
+        this.ctx.moveTo(-10, -p.height/2 - 13);
+        this.ctx.lineTo(-15, -p.height/2 - 20);
+        this.ctx.lineTo(-15, -p.height/2 - 5);
+      }
+      this.ctx.fill();
+
+      // 眼睛
+      this.ctx.fillStyle = '#000';
+      this.ctx.beginPath();
+      this.ctx.arc(p.isLeft ? 10 : -10, -p.height/4, 3, 0, Math.PI*2);
+      this.ctx.fill();
+      
+      // 紅色臉頰
+      this.ctx.fillStyle = '#ef4444';
+      this.ctx.beginPath();
+      this.ctx.arc(p.isLeft ? 5 : -5, 0, 5, 0, Math.PI*2);
+      this.ctx.fill();
+
+      // 背上棕色條紋
+      this.ctx.fillStyle = '#a16207';
+      if (p.isLeft) {
+        this.ctx.fillRect(-p.width/2, 5, 10, 4);
+        this.ctx.fillRect(-p.width/2, 15, 10, 4);
+      } else {
+        this.ctx.fillRect(p.width/2 - 10, 5, 10, 4);
+        this.ctx.fillRect(p.width/2 - 10, 15, 10, 4);
+      }
+
+      this.ctx.restore();
     };
 
-    drawPlayer(this.player);
-    drawPlayer(this.computer);
+    drawPikachu(this.player);
+    drawPikachu(this.computer);
 
-    // Ball
-    this.ctx.fillStyle = '#fff';
-    this.ctx.beginPath();
-    this.ctx.arc(this.ball.x, this.ball.y, this.ball.radius, 0, Math.PI * 2);
-    this.ctx.fill();
-    this.ctx.strokeStyle = '#ddd';
-    this.ctx.stroke();
+    // 精靈球 (Poké Ball)
+    if (this.ball.active || true) {
+      this.ctx.save();
+      this.ctx.translate(this.ball.x, this.ball.y);
+      
+      // 根據 X 速度旋轉球
+      const rotation = (this.ball.x % 100) / 100 * Math.PI * 2;
+      this.ctx.rotate(rotation);
+
+      // 上半紅
+      this.ctx.fillStyle = '#ef4444';
+      this.ctx.beginPath();
+      this.ctx.arc(0, 0, this.ball.radius, Math.PI, Math.PI*2);
+      this.ctx.fill();
+      
+      // 下半白
+      this.ctx.fillStyle = '#ffffff';
+      this.ctx.beginPath();
+      this.ctx.arc(0, 0, this.ball.radius, 0, Math.PI);
+      this.ctx.fill();
+      
+      // 外框與中間黑線
+      this.ctx.strokeStyle = '#000';
+      this.ctx.lineWidth = 2;
+      this.ctx.beginPath();
+      this.ctx.arc(0, 0, this.ball.radius, 0, Math.PI*2);
+      this.ctx.stroke();
+      
+      this.ctx.beginPath();
+      this.ctx.moveTo(-this.ball.radius, 0);
+      this.ctx.lineTo(this.ball.radius, 0);
+      this.ctx.stroke();
+      
+      // 中間白點
+      this.ctx.fillStyle = '#fff';
+      this.ctx.beginPath();
+      this.ctx.arc(0, 0, 3, 0, Math.PI*2);
+      this.ctx.fill();
+      this.ctx.stroke();
+
+      this.ctx.restore();
+    }
   }
 
   loop() {
