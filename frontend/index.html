@@ -118,19 +118,21 @@
 
       <div class="actions animate-fadeInUp anim-delay-3">
         <a href="./nickname.html" class="btn btn-primary" id="btn-start">
-          🏸 START GAME
+          🏸 START GAME 開始遊戲
         </a>
         <a href="./ranking.html" class="btn btn-secondary">
-          🏆 RANKING 排行榜
+          🏆 RANKING 即時排行榜
         </a>
       </div>
     </div>
 
-    <p class="footer-note">掃描 QR Code 加入對戰 · 祝新婚快樂 💍</p>
+    <p class="footer-note" id="user-status-hint">祝新郎 Tony & 新娘 Kay 新婚快樂 💍</p>
   </div>
 
   <script type="module">
-    // Floating shuttlecocks animation
+    import { auth, onAuthStateChanged, db, ref, get } from './firebase.js';
+
+    // Floating animations
     const balls = ['🏸', '💍', '🎊', '🌸', '💕'];
     const container = document.getElementById('floating-balls');
     for (let i = 0; i < 15; i++) {
@@ -143,6 +145,54 @@
       el.style.fontSize = (14 + Math.random() * 16) + 'px';
       container.appendChild(el);
     }
+
+    const btnStart = document.getElementById('btn-start');
+    const userStatusHint = document.getElementById('user-status-hint');
+
+    // 檢查既有本地記憶
+    const savedNickname = localStorage.getItem('wbc_nickname');
+    const isGoogle = localStorage.getItem('wbc_is_google') === 'true';
+
+    if (savedNickname) {
+      btnStart.href = './lobby.html';
+      btnStart.innerHTML = `🏸 進入大廳 (<span style="color:#fde047;">${savedNickname}</span>)`;
+      userStatusHint.innerHTML = isGoogle 
+        ? `🟢 Google 帳號已連線：<strong>${savedNickname}</strong> (自動記錄積分)`
+        : `⚪ 訪客模式：<strong>${savedNickname}</strong>`;
+    }
+
+    // 監聽 Firebase Auth 登入狀態 (自動對照 Google 帳號與最新暱稱/積分)
+    onAuthStateChanged(auth, async (user) => {
+      if (user) {
+        const googleUid = 'google_' + user.uid;
+        try {
+          const snap = await get(ref(db, 'players/' + googleUid));
+          let finalNickname = user.displayName || 'Google玩家';
+          let points = 0;
+          let wins = 0;
+
+          if (snap.exists()) {
+            const data = snap.val();
+            if (data.nickname) finalNickname = data.nickname;
+            points = data.points || 0;
+            wins = data.wins || 0;
+          }
+
+          // 自動同步本地快取
+          localStorage.setItem('wbc_uid', googleUid);
+          localStorage.setItem('wbc_nickname', finalNickname);
+          localStorage.setItem('wbc_is_google', 'true');
+          localStorage.setItem('wbc_points', points);
+          localStorage.setItem('wbc_wins', wins);
+
+          btnStart.href = './lobby.html';
+          btnStart.innerHTML = `🏸 進入大廳 (<span style="color:#fde047;">${finalNickname}</span>)`;
+          userStatusHint.innerHTML = `🟢 Google 帳號已自動連線：<strong>${finalNickname}</strong> (${points} pts)`;
+        } catch (e) {
+          console.warn('Auto auth sync error:', e);
+        }
+      }
+    });
   </script>
 </body>
 </html>
