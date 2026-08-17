@@ -53,31 +53,65 @@ function startRealBadmintonMode() {
   if (!gameEngine) {
     gameEngine = new BadmintonEngine('game-canvas');
     
-    // Bind Controls
-    const btnUp = document.getElementById('btn-up');
-    const btnDown = document.getElementById('btn-down');
-    const btnLeft = document.getElementById('btn-left');
+    // ── 虛擬按鈕綁定 ─────────────────────────────────────────
+    const btnUp    = document.getElementById('btn-up');
+    const btnDown  = document.getElementById('btn-down');
+    const btnLeft  = document.getElementById('btn-left');
     const btnRight = document.getElementById('btn-right');
-    const btnHit = document.getElementById('btn-hit');
-    
-    const bindBtn = (btn, key, val) => {
+    const btnHit   = document.getElementById('btn-hit');
+
+    const bindDirBtn = (btn, key) => {
       if (!btn) return;
-      btn.addEventListener('pointerdown', (e) => { e.preventDefault(); gameEngine.keys[key] = val; });
-      btn.addEventListener('pointerup', (e) => { e.preventDefault(); gameEngine.keys[key] = !val; });
-      btn.addEventListener('pointerleave', (e) => { e.preventDefault(); gameEngine.keys[key] = !val; });
+      btn.addEventListener('pointerdown',  (e) => { e.preventDefault(); gameEngine.keys[key] = true; });
+      btn.addEventListener('pointerup',    (e) => { e.preventDefault(); gameEngine.keys[key] = false; });
+      btn.addEventListener('pointerleave', (e) => { e.preventDefault(); gameEngine.keys[key] = false; });
     };
-    
-    bindBtn(btnUp, 'up', true);
-    bindBtn(btnDown, 'down', true);
-    bindBtn(btnLeft, 'left', true);
-    bindBtn(btnRight, 'right', true);
-    bindBtn(btnHit, 'hit', true); // Hit can also be a held key for spiking
-    
-    btnHit.addEventListener('pointerdown', (e) => {
-      e.preventDefault();
-      gameEngine.playerHit();
+
+    bindDirBtn(btnUp,    'up');
+    bindDirBtn(btnDown,  'down');
+    bindDirBtn(btnLeft,  'left');
+    bindDirBtn(btnRight, 'right');
+
+    // A 鍵（殺球/撲球）— 每次按下觸發一次 powerHit
+    if (btnHit) {
+      btnHit.addEventListener('pointerdown', (e) => {
+        e.preventDefault();
+        gameEngine.playerHit();
+      });
+    }
+
+    // ── 鍵盤支援（電腦網頁版）────────────────────────────────
+    const KEY_MAP = {
+      'ArrowUp':    'up',
+      'ArrowDown':  'down',
+      'ArrowLeft':  'left',
+      'ArrowRight': 'right',
+      'KeyW': 'up',
+      'KeyS': 'down',
+      'KeyA': 'left',
+      'KeyD': 'right',
+    };
+    const POWER_KEYS = new Set(['KeyX', 'Space', 'KeyZ', 'ShiftLeft', 'ShiftRight']);
+
+    document.addEventListener('keydown', (e) => {
+      if (KEY_MAP[e.code]) {
+        e.preventDefault();
+        gameEngine.keys[KEY_MAP[e.code]] = true;
+      }
+      if (POWER_KEYS.has(e.code) && !e.repeat) {
+        e.preventDefault();
+        gameEngine.playerHit();
+      }
     });
-    
+
+    document.addEventListener('keyup', (e) => {
+      if (KEY_MAP[e.code]) {
+        e.preventDefault();
+        gameEngine.keys[KEY_MAP[e.code]] = false;
+      }
+    });
+
+    // ── 分數 / 遊戲結束回呼 ──────────────────────────────────
     gameEngine.onScoreUpdate = (pScore, cScore) => {
       myScoreVsEl.innerText = pScore;
       compScoreVsEl.innerText = cScore;
@@ -94,7 +128,7 @@ function startRealBadmintonMode() {
           });
         }
       } else {
-        gameStatus.innerText = '💀 失敗！電腦獲得了 5 分！';
+        gameStatus.innerText = '💀 失敗！再試一次！';
         gameStatus.style.background = 'rgba(255,0,0,0.5)';
       }
       
@@ -114,6 +148,7 @@ function startRealBadmintonMode() {
   
   gameEngine.start();
 }
+
 
 
 // Listen to Global Game State (多人連線邏輯)

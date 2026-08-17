@@ -1,39 +1,68 @@
 import { PikaPhysics, PikaUserInput } from './physics.js';
 
+/**
+ * Pikachu Volleyball Engine
+ * 完美復刻原版皮卡丘打排球物理與畫面
+ *
+ * 原版座標系：
+ *   玩家 x,y = 中心點  (64x64 sprite, 所以左上角 = x-32, y-32)
+ *   球   x,y = 中心點  (40x40 sprite, 所以左上角 = x-20, y-20)
+ *   地板 y = 248 (ground_red 最上緣)
+ *   球落地 y = 252 (BALL_TOUCHING_GROUND_Y_COORD)
+ *   玩家站地 y = 244 (PLAYER_TOUCHING_GROUND_Y_COORD)
+ *   網柱頂 y = 176 (NET_PILLAR_TOP_TOP_Y_COORD)
+ */
 export class BadmintonEngine {
   constructor(canvasId) {
     this.canvas = document.getElementById(canvasId);
     this.ctx = this.canvas.getContext('2d');
-    
-    // 固定經典解析度 432x304
+
+    // 固定原版解析度
     this.canvas.width = 432;
     this.canvas.height = 304;
-    
+
     this.isRunning = false;
     this.playerScore = 0;
     this.compScore = 0;
     this.maxScore = 15;
-    
-    this.pikaPhysics = new PikaPhysics(false, true); // 左邊玩家，右邊電腦
-    
-    this.keys = { up: false, down: false, left: false, right: false, hit: false };
+
+    // 物理引擎 (player1=左=玩家, player2=右=AI)
+    this.pikaPhysics = new PikaPhysics(false, true);
+
+    // 輸入狀態 (hit 是「non-auto-repeated」的 powerHit，需每幀重置)
+    this.keys = { up: false, down: false, left: false, right: false };
+    this.powerHitThisFrame = false; // powerHit 只在按下的那一幀有效
+
     this.loop = this.loop.bind(this);
-    
-    // 載入 Sprite Sheet
+
+    // 預載 Sprite Sheet
     this.spriteImg = new Image();
     this.spriteImg.src = './sprite_sheet.png';
     this.spriteData = null;
+    this.spriteLoaded = false;
     fetch('./sprite_sheet.json')
       .then(res => res.json())
       .then(data => {
         this.spriteData = data.frames;
+        this.spriteLoaded = true;
       });
 
-    // 控制禎率大約 30 FPS，還原原版速度
+    // 原版 30 FPS
     this.lastFrameTime = 0;
     this.fpsInterval = 1000 / 30;
+
+    // 雲朵動態位置
+    this.clouds = [
+      { x: 40, y: 38, speed: 0.3 },
+      { x: 160, y: 20, speed: 0.2 },
+      { x: 300, y: 50, speed: 0.4 },
+    ];
+
+    // 回呼
+    this.onScoreUpdate = null;
+    this.onGameOver = null;
   }
-  
+
   start() {
     this.isRunning = true;
     this.playerScore = 0;
@@ -42,52 +71,56 @@ export class BadmintonEngine {
     this.lastFrameTime = performance.now();
     requestAnimationFrame(this.loop);
   }
-  
+
   stop() {
     this.isRunning = false;
   }
-  
+
+  /** 玩家按下 A/殺球鍵 — 在這幀觸發 powerHit */
   playerHit() {
-    this.keys.hit = true;
-    // 點擊一次視為按住一小段時間，確保觸發
-    setTimeout(() => { this.keys.hit = false; }, 100);
+    this.powerHitThisFrame = true;
   }
-  
+
   update() {
     if (!this.isRunning) return;
-    
+
     const p1Input = new PikaUserInput();
-    if (this.keys.left) p1Input.xDirection = -1;
+    if (this.keys.left)  p1Input.xDirection = -1;
     if (this.keys.right) p1Input.xDirection = 1;
-    if (this.keys.up) p1Input.yDirection = -1;
-    if (this.keys.down) p1Input.yDirection = 1;
-    if (this.keys.hit) p1Input.powerHit = 1;
-    
-    // p2Input 給空值，因為 physicsEngine 內部會處理 AI
-    const p2Input = new PikaUserInput(); 
-    
+    if (this.keys.up)    p1Input.yDirection = -1;
+    if (this.keys.down)  p1Input.yDirection = 1;
+    // powerHit 必須是「非自動重複」的按鍵（只在按下的那一幀為 1）
+    p1Input.powerHit = this.powerHitThisFrame ? 1 : 0;
+    this.powerHitThisFrame = false; // 清除，避免下幀再觸發
+
+    const p2Input = new PikaUserInput(); // AI 由 physicsEngine 內部處理
+
     const isBallTouchingGround = this.pikaPhysics.runEngineForNextFrame([p1Input, p2Input]);
-    
+
     if (isBallTouchingGround) {
-      if (this.pikaPhysics.ball.x < 216) {
+      // 判斷得分：球落在哪邊，對面得分
+      const ballX = this.pikaPhysics.ball.x;
+      if (ballX < 216) {
+        // 球落在左半邊 → 右邊電腦得分
         this.compScore++;
       } else {
+        // 球落在右半邊 → 左邊玩家得分
         this.playerScore++;
       }
-      
+
       if (this.onScoreUpdate) {
         this.onScoreUpdate(this.playerScore, this.compScore);
       }
-      
+
       if (this.playerScore >= this.maxScore || this.compScore >= this.maxScore) {
         this.isRunning = false;
         if (this.onGameOver) this.onGameOver(this.playerScore > this.compScore);
       } else {
-        // 等待 1.5 秒後重新發球
-        this.isRunning = false; 
+        // 停止，1.5 秒後重新發球
+        this.isRunning = false;
         setTimeout(() => {
-          // 失分方發球 (左邊分數增加代表球掉在右邊，右邊發球)
-          const p2Serve = this.pikaPhysics.ball.x >= 216;
+          // 失分方發球：如果球落在左邊（電腦得分），下一球由電腦（右邊）發
+          const p2Serve = ballX < 216;
           this.pikaPhysics.player1.initializeForNewRound();
           this.pikaPhysics.player2.initializeForNewRound();
           this.pikaPhysics.ball.initializeForNewRound(p2Serve);
@@ -99,11 +132,13 @@ export class BadmintonEngine {
     }
   }
 
+  // ─── 繪圖輔助 ──────────────────────────────────────────────
+
   drawSprite(name, x, y, flipX = false) {
-    if (!this.spriteData || !this.spriteImg.complete) return;
+    if (!this.spriteLoaded) return;
     const frameData = this.spriteData[name];
     if (!frameData) return;
-    
+
     const f = frameData.frame;
     this.ctx.save();
     if (flipX) {
@@ -115,75 +150,99 @@ export class BadmintonEngine {
     }
     this.ctx.restore();
   }
-  
-  draw() {
-    // 尚未載入圖片時先不畫
-    if (!this.spriteData) return;
 
-    // 清空背景
-    this.ctx.fillStyle = '#6cb4e4'; // 經典天空藍
-    this.ctx.fillRect(0, 0, 432, 304);
-    
-    // 背景：山脈
-    this.drawSprite('objects/mountain.png', 0, 188);
-    
-    // 背景：雲朵
-    this.drawSprite('objects/cloud.png', 30, 40);
-    this.drawSprite('objects/cloud.png', 180, 20);
-    this.drawSprite('objects/cloud.png', 320, 60);
-
-    // 地板 (紅色邊緣與黃色區域，皆為 16x16 的像素圖塊)
-    for (let i = 0; i < 432; i += 16) {
-      this.drawSprite('objects/ground_red.png', i, 248);
-      for (let j = 248 + 16; j < 304; j += 16) {
-        this.drawSprite('objects/ground_yellow.png', i, j);
+  /** 重複貼一個 tile 填滿指定矩形 */
+  drawTiledSprite(name, rectX, rectY, rectW, rectH) {
+    if (!this.spriteLoaded) return;
+    const frameData = this.spriteData[name];
+    if (!frameData) return;
+    const f = frameData.frame;
+    for (let y = rectY; y < rectY + rectH; y += f.h) {
+      for (let x = rectX; x < rectX + rectW; x += f.w) {
+        this.ctx.drawImage(this.spriteImg, f.x, f.y, f.w, f.h, x, y, f.w, f.h);
       }
     }
-    
-    // 網柱
-    this.drawSprite('objects/net_pillar_top.png', 213, 176);
-    this.drawSprite('objects/net_pillar.png', 213, 192);
+  }
 
-    // 玩家
+  draw() {
+    if (!this.spriteLoaded) return;
+
+    const ctx = this.ctx;
+
+    // ── 天空背景 ──
+    ctx.fillStyle = '#70b8e8';
+    ctx.fillRect(0, 0, 432, 188);
+
+    // ── 移動的雲朵 ──
+    for (const c of this.clouds) {
+      c.x = (c.x + c.speed) % 480;
+      this.drawSprite('objects/cloud.png', c.x - 48, c.y);
+    }
+
+    // ── 山脈 (y=188) ──
+    this.drawSprite('objects/mountain.png', 0, 188);
+
+    // ── 地板 (原版: ground_red 在 y=248，然後 ground_yellow 填下方) ──
+    this.drawTiledSprite('objects/ground_red.png',    0, 248, 432, 16);
+    this.drawTiledSprite('objects/ground_yellow.png', 0, 264, 432, 40);
+
+    // ── 網柱 (net_pillar_top 在 176, net_pillar 重複填 184~248) ──
+    const netX = 216 - 4; // 網柱水平中心對齊在 216，柱寬 8
+    this.drawTiledSprite('objects/net_pillar_top.png', netX, 176, 8, 8);
+    this.drawTiledSprite('objects/net_pillar.png',     netX, 184, 8, 64);
+
+    // ── 玩家陰影 ──
     const p1 = this.pikaPhysics.player1;
     const p2 = this.pikaPhysics.player2;
-    
-    // physics.js 裡的 x, y 代表物理碰撞的中心座標，因此畫圖時需要位移 (-32, -32)
-    this.drawSprite(`pikachu/pikachu_${p1.state}_${p1.frameNumber}.png`, p1.x - 32, p1.y - 32, false);
-    // 電腦在右邊，需要水平翻轉圖片
-    this.drawSprite(`pikachu/pikachu_${p2.state}_${p2.frameNumber}.png`, p2.x - 32, p2.y - 32, true);
+    // 陰影 sprite 是 32x8，繪製在腳底
+    this.drawSprite('objects/shadow.png', p1.x - 16, 248);
+    this.drawSprite('objects/shadow.png', p2.x - 16, 248);
 
-    // 寶貝球
+    // ── 玩家 Pikachu ──
+    // p.x, p.y = 中心點，sprite 64x64 → 左上角 = (x-32, y-32)
+    const p1State = Math.min(p1.state, 6);
+    const p1Frame = p1.frameNumber;
+    const p2State = Math.min(p2.state, 6);
+    const p2Frame = p2.frameNumber;
+
+    // 確認 sprite 存在再繪製
+    const p1SpriteName = `pikachu/pikachu_${p1State}_${p1Frame}.png`;
+    const p2SpriteName = `pikachu/pikachu_${p2State}_${p2Frame}.png`;
+    this.drawSprite(p1SpriteName, p1.x - 32, p1.y - 32, false);
+    // 右邊玩家水平翻轉
+    this.drawSprite(p2SpriteName, p2.x - 32, p2.y - 32, true);
+
+    // ── 球 ──
     const b = this.pikaPhysics.ball;
-    
-    // 如果有扣殺特效
+
+    // 殺球特效 (punch effect)
     if (b.punchEffectRadius > 0) {
+      // ball_punch sprite 40x40，以 punchEffectX/Y 為中心
       this.drawSprite('ball/ball_punch.png', b.punchEffectX - 20, b.punchEffectY - 20);
     }
-    
+
     if (b.isPowerHit) {
+      // 殘影
       this.drawSprite('ball/ball_trail.png', b.previousPreviousX - 20, b.previousPreviousY - 20);
-      this.drawSprite('ball/ball_trail.png', b.previousX - 20, b.previousY - 20);
+      this.drawSprite('ball/ball_trail.png', b.previousX - 20,         b.previousY - 20);
       this.drawSprite('ball/ball_hyper.png', b.x - 20, b.y - 20);
     } else {
       let rot = b.rotation;
-      if (rot === 5) rot = 0; // 避免找不到圖片
+      if (rot < 0 || rot > 4) rot = 0; // 防止 frame 5 (hyper glitch 情況)
       this.drawSprite(`ball/ball_${rot}.png`, b.x - 20, b.y - 20);
     }
   }
-  
+
   loop(timestamp) {
     if (!this.isRunning) return;
-    
+
     const elapsed = timestamp - this.lastFrameTime;
-    if (elapsed > this.fpsInterval) {
+    if (elapsed >= this.fpsInterval) {
       this.lastFrameTime = timestamp - (elapsed % this.fpsInterval);
       this.update();
       this.draw();
     }
-    
-    if (this.isRunning) {
-      requestAnimationFrame(this.loop);
-    }
+
+    requestAnimationFrame(this.loop);
   }
 }
