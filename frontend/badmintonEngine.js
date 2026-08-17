@@ -788,7 +788,7 @@ export class BadmintonEngine {
     if (elapsed > 200) elapsed = 200;
 
     this.accumulator = (this.accumulator || 0) + elapsed;
-    const fixedTimeStep = 1000 / 30; // 固定每秒 30 次物理幀 (33.33ms)，與裝置螢幕更新率/解析度 100% 脫鉤
+    const fixedTimeStep = 1000 / 30;
 
     while (this.accumulator >= fixedTimeStep) {
       this.update();
@@ -798,4 +798,51 @@ export class BadmintonEngine {
     this.draw();
     requestAnimationFrame(this.loop);
   }
+
+  /**
+   * 啟動背景物理計算 (setInterval 驅動，不受 tab 最小化影響)
+   * 只在 host multiplayer 模式使用，確保 P1 縮小時物理仍持續廣播給 P2
+   */
+  startBackgroundPhysics() {
+    if (this._bgInterval) return; // 防止重複啟動
+    const fixedTimeStep = 1000 / 30;
+    this._bgInterval = setInterval(() => {
+      if (!this.isRunning) {
+        this.stopBackgroundPhysics();
+        return;
+      }
+      this.update();
+    }, fixedTimeStep);
+  }
+
+  stopBackgroundPhysics() {
+    if (this._bgInterval) {
+      clearInterval(this._bgInterval);
+      this._bgInterval = null;
+    }
+  }
 }
+
+// ── 全域 visibilitychange：Host 背景 setInterval 保活機制 ──
+// 當 Host 切換到背景 tab 時，requestAnimationFrame 暫停，改用 setInterval 保持物理廣播
+let _globalEngineRef = null;
+
+function setGlobalEngine(engine) {
+  _globalEngineRef = engine;
+}
+
+document.addEventListener('visibilitychange', () => {
+  const engine = _globalEngineRef;
+  if (!engine) return;
+
+  const isHostFallback = engine.multiplayerRole === 'host' && engine.isMultiplayer;
+  if (document.hidden) {
+    if (isHostFallback) {
+      engine.startBackgroundPhysics();
+    }
+  } else {
+    engine.stopBackgroundPhysics();
+  }
+});
+
+export { setGlobalEngine };

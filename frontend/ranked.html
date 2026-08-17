@@ -213,17 +213,22 @@
 
     /* ─── 十字方向鍵 D-Pad ─── */
     .dpad {
-      display: grid;
-      grid-template-columns: 1fr 1fr 1fr;
-      grid-template-rows: 1fr 1fr 1fr;
-      width: clamp(120px, 32vw, 150px);
-      height: clamp(120px, 32vw, 150px);
+      display: flex;
+      flex-direction: column;
       gap: 3px;
+      width: clamp(115px, 32vw, 148px);
       pointer-events: auto;
       touch-action: none;
       user-select: none;
     }
+    .dpad-row {
+      display: flex;
+      gap: 3px;
+      justify-content: center;
+    }
     .dpad-btn {
+      flex: 1;
+      height: clamp(38px, 11vw, 52px);
       display: flex;
       align-items: center;
       justify-content: center;
@@ -231,7 +236,7 @@
       border: 1.5px solid rgba(255, 255, 255, 0.25);
       border-radius: 8px;
       color: rgba(255,255,255,0.75);
-      font-size: clamp(16px, 5vw, 22px);
+      font-size: clamp(14px, 4.5vw, 20px);
       cursor: pointer;
       transition: background 0.07s, transform 0.07s;
       touch-action: none;
@@ -245,11 +250,13 @@
       transform: scale(0.9);
       box-shadow: 0 0 12px rgba(56,189,248,0.6);
     }
-    .dpad-center {
-      background: rgba(15, 23, 42, 0.5);
-      border: none;
-      border-radius: 8px;
-      pointer-events: none;
+    /* 上排僅有一個鍵居中 */
+    .dpad-up-row {
+      display: flex;
+      justify-content: center;
+    }
+    .dpad-up-row .dpad-btn {
+      flex: 0 0 calc(33.33% - 2px);
     }
 
     /* ─── 右手雙按鈕群組 (跳躍 Jump ＋ 殺球 Hit) ─── */
@@ -532,21 +539,19 @@
         <div class="badge-score" id="arena-p2-score">0</div>
       </div>
 
-      <!-- 十字方向鍵 D-Pad -->
+      <!-- 十字方向鍵 D-Pad：↑ 在上方 / ◀ ▼ ▶ 同一橫排 -->
       <div class="controls">
         <div class="dpad" id="dpad">
-          <!-- 上排 -->
-          <div></div>
-          <button class="dpad-btn" id="dpad-up" aria-label="上">▲</button>
-          <div></div>
-          <!-- 中排 -->
-          <button class="dpad-btn" id="dpad-left" aria-label="左">◀</button>
-          <div class="dpad-center"></div>
-          <button class="dpad-btn" id="dpad-right" aria-label="右">▶</button>
-          <!-- 下排 -->
-          <div></div>
-          <button class="dpad-btn" id="dpad-down" aria-label="下">▼</button>
-          <div></div>
+          <!-- 上排：僅 ▲ 居中 -->
+          <div class="dpad-up-row">
+            <button class="dpad-btn" id="dpad-up" aria-label="上">▲</button>
+          </div>
+          <!-- 下排：◀ ▼ ▶ 同一橫 -->
+          <div class="dpad-row">
+            <button class="dpad-btn" id="dpad-left" aria-label="左">◀</button>
+            <button class="dpad-btn" id="dpad-down" aria-label="下">▼</button>
+            <button class="dpad-btn" id="dpad-right" aria-label="右">▶</button>
+          </div>
         </div>
 
         <div class="action">

@@ -1,6 +1,6 @@
 import './version.js';
 import { db, ref, onValue, set, get, update, remove, increment, onDisconnect } from './firebase.js';
-import { BadmintonEngine } from './badmintonEngine.js';
+import { BadmintonEngine, setGlobalEngine } from './badmintonEngine.js';
 import { calculateRankedPoints } from './rankedScore.js';
 
 const uid = localStorage.getItem('wbc_uid') || ('user_' + Math.floor(Math.random() * 1000000));
@@ -312,6 +312,7 @@ function enterArenaMatch() {
 
   if (!gameEngine) {
     gameEngine = new BadmintonEngine('game-canvas');
+    setGlobalEngine(gameEngine);
     bindMobileControls();
   }
 
@@ -372,6 +373,7 @@ function enterArenaMatch() {
           // 切換為 Host 模式
           gameEngine.stop();
           gameEngine = new BadmintonEngine('game-canvas');
+          setGlobalEngine(gameEngine); // 登錄全域供 visibilitychange 監聽
           bindMobileControls();
           gameEngine.onScoreUpdate = (p1Score, p2Score) => {
             arenaP1Score.textContent = p1Score;
