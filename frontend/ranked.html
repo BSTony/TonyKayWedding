@@ -421,8 +421,11 @@
       <div class="radar-center-icon">🏸</div>
     </div>
 
-    <div id="match-status-text" style="font-size: 16px; font-weight: 900; color: #8b5cf6; margin-bottom: 12px;">
-      正在配對實力相當的對手...
+    <div id="match-status-text" style="font-size: 16px; font-weight: 900; color: #8b5cf6; margin-bottom: 4px;">
+      正在搜尋線上真人對手...
+    </div>
+    <div id="match-timer-badge" style="font-size: 12px; font-weight: 700; color: #f59e0b; margin-bottom: 12px;">
+      ⏳ 真人搜尋中 (剩餘 <span id="queue-countdown">30</span> 秒)
     </div>
 
     <!-- 選手對戰卡片 -->
@@ -464,9 +467,14 @@
       </div>
     </div>
 
-    <button class="main-cta" id="btn-cancel-match" onclick="window.location.href='./lobby.html'" style="background: rgba(255,255,255,0.15); color: var(--text-primary);">
-      取消配對
-    </button>
+    <div style="display:flex; flex-direction:column; gap:10px;">
+      <button class="main-cta" id="btn-play-ai" style="background: linear-gradient(135deg, #f59e0b, #b45309); color: white;">
+        🤖 一鍵匹配天梯高手 AI
+      </button>
+      <button class="main-cta" id="btn-cancel-match" onclick="window.location.href='./lobby.html'" style="background: rgba(255,255,255,0.15); color: var(--text-primary);">
+        取消配對
+      </button>
+    </div>
   </div>
 
   <!-- ─── 2. 5分制天梯對決 ─── -->

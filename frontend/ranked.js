@@ -62,6 +62,8 @@ const RANKED_CONTENDERS = [
 
 let queueRef = null;
 let matchFound = false;
+let countdownTimer = null;
+let remainingSeconds = 30;
 
 // 啟動排位配對 (優先配對線上真人，超時則配對天梯高手)
 function startMatchmaking() {
@@ -69,8 +71,14 @@ function startMatchmaking() {
   arenaView.style.display = 'none';
   matchModal.style.display = 'none';
   matchFound = false;
+  remainingSeconds = 30;
+
+  if (countdownTimer) clearInterval(countdownTimer);
 
   matchStatusText.textContent = '🔍 正在搜尋線上真人對手...';
+  const timerBadge = document.getElementById('queue-countdown');
+  if (timerBadge) timerBadge.textContent = remainingSeconds;
+
   oppAvatarEl.textContent = '❓';
   oppNameEl.textContent = '搜尋對手中...';
   oppNameEl.style.color = 'var(--text-secondary)';
@@ -85,9 +93,10 @@ function startMatchmaking() {
       nickname,
       points: myPoints,
       avatar: myAvatarEl.textContent,
+      status: 'searching',
       matchedWith: null,
       createdAt: Date.now()
-    }).catch(() => {});
+    }).catch((err) => console.error('Queue set error:', err));
 
     // 2. 監聽自身是否被其他玩家配對
     onValue(queueRef, (snap) => {
@@ -95,6 +104,7 @@ function startMatchmaking() {
       const data = snap.val();
       if (data && data.matchedWith) {
         matchFound = true;
+        if (countdownTimer) clearInterval(countdownTimer);
         pairWithRealOpponent(data.matchedWith);
       }
     });
@@ -106,12 +116,21 @@ function startMatchmaking() {
       for (const otherUid in allQueue) {
         if (otherUid !== uid) {
           const other = allQueue[otherUid];
-          if (other && !other.matchedWith && (Date.now() - (other.createdAt || 0) < 30000)) {
+          if (other && (other.status === 'searching' || !other.matchedWith) && (Date.now() - (other.createdAt || 0) < 60000)) {
             matchFound = true;
-            // 互相綁定
+            if (countdownTimer) clearInterval(countdownTimer);
+
+            // 雙向確認綁定
             update(ref(db, 'rankedQueue/' + otherUid), {
+              status: 'matched',
               matchedWith: { uid, nickname, points: myPoints, avatar: myAvatarEl.textContent }
             }).catch(() => {});
+
+            update(queueRef, {
+              status: 'matched',
+              matchedWith: { uid: other.uid, nickname: other.nickname, points: other.points, avatar: other.avatar }
+            }).catch(() => {});
+
             pairWithRealOpponent(other);
             break;
           }
@@ -122,19 +141,41 @@ function startMatchmaking() {
     console.warn('Firebase RTDB queue initialization error:', err);
   }
 
-  // 4. 若 4.5 秒內沒有其他真人玩家在排隊，自動匹配天梯挑戰者
-  setTimeout(() => {
-    if (!matchFound) {
-      matchFound = true;
-      if (queueRef) remove(queueRef).catch(() => {});
-      pairWithAIContender();
+  // 4. 倒數 30 秒計時器
+  countdownTimer = setInterval(() => {
+    remainingSeconds--;
+    if (timerBadge) timerBadge.textContent = remainingSeconds;
+
+    if (remainingSeconds <= 0) {
+      if (countdownTimer) clearInterval(countdownTimer);
+      if (!matchFound) {
+        matchFound = true;
+        if (queueRef) remove(queueRef).catch(() => {});
+        pairWithAIContender();
+      }
     }
-  }, 4500);
+  }, 1000);
+
+  // 綁定一鍵挑戰 AI 按鈕
+  const btnPlayAi = document.getElementById('btn-play-ai');
+  if (btnPlayAi) {
+    btnPlayAi.onclick = () => {
+      if (!matchFound) {
+        matchFound = true;
+        if (countdownTimer) clearInterval(countdownTimer);
+        if (queueRef) remove(queueRef).catch(() => {});
+        pairWithAIContender();
+      }
+    };
+  }
 }
 
 // 配對到真人玩家
 function pairWithRealOpponent(opponent) {
-  if (queueRef) remove(queueRef).catch(() => {});
+  if (countdownTimer) clearInterval(countdownTimer);
+  setTimeout(() => {
+    if (queueRef) remove(queueRef).catch(() => {});
+  }, 1500);
 
   currentOpponent = {
     name: opponent.nickname || '線上嘉賓',
@@ -157,6 +198,7 @@ function pairWithRealOpponent(opponent) {
 
 // 配對到天梯挑戰者 (AI)
 function pairWithAIContender() {
+  if (countdownTimer) clearInterval(countdownTimer);
   const randContender = RANKED_CONTENDERS[Math.floor(Math.random() * RANKED_CONTENDERS.length)];
   const oppPoints = Math.max(0, myPoints + randContender.ptsOffset);
 
@@ -178,6 +220,10 @@ function pairWithAIContender() {
     enterArenaMatch();
   }, 1200);
 }
+
+window.addEventListener('beforeunload', () => {
+  if (queueRef) remove(queueRef).catch(() => {});
+});
 
 // 進入對決賽場
 function enterArenaMatch() {
