@@ -1,0 +1,520 @@
+<!DOCTYPE html>
+<html lang="zh-TW">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no">
+  <title>婚禮連線錦標賽 🏆</title>
+  <link rel="stylesheet" href="./style.css">
+  <style>
+    body {
+      overflow-x: hidden;
+      touch-action: manipulation;
+      background: var(--bg-main);
+      color: var(--text-primary);
+      margin: 0; padding: 0;
+      user-select: none;
+    }
+
+    /* ─── 頂部導航 ─── */
+    .header {
+      padding: 14px 18px;
+      display: flex;
+      align-items: center;
+      justify-content: space-between;
+      background: var(--bg-card);
+      box-shadow: var(--shadow);
+      position: sticky;
+      top: 0;
+      z-index: 50;
+    }
+    .header-left { display: flex; align-items: center; gap: 12px; }
+    .header-btn {
+      width: 38px; height: 38px;
+      border-radius: 50%;
+      border: 1px solid var(--border);
+      background: var(--bg-main);
+      font-size: 16px;
+      cursor: pointer;
+      display: flex; align-items: center; justify-content: center;
+    }
+    .header-btn:active { transform: scale(0.92); }
+
+    /* ─── 等待室容器 ─── */
+    .lobby-view {
+      max-width: 540px;
+      margin: 0 auto;
+      padding: 16px;
+    }
+
+    .room-banner {
+      background: linear-gradient(135deg, #f59e0b, #b45309);
+      color: white;
+      border-radius: var(--radius);
+      padding: 20px;
+      text-align: center;
+      box-shadow: 0 8px 24px rgba(245, 158, 11, 0.35);
+      margin-bottom: 20px;
+    }
+    .room-banner h1 { font-size: 22px; font-weight: 900; margin: 0 0 6px; }
+    .room-banner p { font-size: 13px; opacity: 0.9; margin: 0; }
+
+    /* ─── 4 強對陣樹狀圖 (Bracket) ─── */
+    .bracket-container {
+      background: var(--bg-card);
+      border-radius: var(--radius);
+      padding: 20px 16px;
+      box-shadow: var(--shadow);
+      border: 1px solid var(--border);
+      margin-bottom: 20px;
+    }
+    .bracket-title {
+      font-size: 14px;
+      font-weight: 900;
+      color: var(--text-secondary);
+      letter-spacing: 1px;
+      text-transform: uppercase;
+      margin-bottom: 14px;
+      display: flex;
+      justify-content: space-between;
+      align-items: center;
+    }
+
+    .bracket-grid {
+      display: grid;
+      grid-template-columns: 1fr auto 1fr;
+      gap: 12px;
+      align-items: center;
+    }
+
+    .slot-card {
+      background: var(--bg-main);
+      border: 2px dashed var(--border);
+      border-radius: 12px;
+      padding: 12px;
+      text-align: center;
+      transition: all 0.2s;
+      min-height: 72px;
+      display: flex;
+      flex-direction: column;
+      align-items: center;
+      justify-content: center;
+    }
+    .slot-card.occupied {
+      border: 2px solid var(--primary);
+      background: rgba(76, 175, 125, 0.08);
+    }
+    .slot-card.is-me {
+      border: 2px solid #38bdf8;
+      background: rgba(56, 189, 248, 0.12);
+    }
+    .slot-card.is-ai {
+      border: 2px solid #a855f7;
+      background: rgba(168, 85, 247, 0.08);
+    }
+    .slot-num {
+      font-size: 11px;
+      font-weight: 900;
+      color: var(--text-secondary);
+      margin-bottom: 2px;
+    }
+    .slot-name {
+      font-size: 14px;
+      font-weight: 900;
+      color: var(--text-primary);
+    }
+    .slot-pts {
+      font-size: 11px;
+      color: #f59e0b;
+      font-weight: 700;
+    }
+
+    .vs-divider {
+      font-size: 12px;
+      font-weight: 900;
+      color: #ef4444;
+      background: rgba(239, 68, 68, 0.1);
+      padding: 4px 8px;
+      border-radius: 8px;
+    }
+
+    /* ─── 操作按鈕群 ─── */
+    .action-group {
+      display: flex;
+      flex-direction: column;
+      gap: 10px;
+      margin-bottom: 20px;
+    }
+    .btn-action {
+      width: 100%;
+      padding: 14px;
+      border-radius: 12px;
+      border: none;
+      font-size: 15px;
+      font-weight: 900;
+      cursor: pointer;
+      display: flex;
+      align-items: center;
+      justify-content: center;
+      gap: 8px;
+      transition: all 0.15s;
+    }
+    .btn-action:active { transform: scale(0.98); }
+    .btn-primary-action {
+      background: linear-gradient(135deg, #f59e0b, #d97706);
+      color: white;
+      box-shadow: 0 6px 20px rgba(245, 158, 11, 0.4);
+    }
+    .btn-secondary-action {
+      background: var(--bg-card);
+      border: 1px solid var(--border);
+      color: var(--text-primary);
+    }
+
+    /* ─── 比賽/觀戰全螢幕模式 ─── */
+    #arena-view {
+      display: none;
+      position: fixed;
+      top: 0; left: 0;
+      width: 100vw; height: 100vh;
+      background: #000;
+      z-index: 100;
+    }
+
+    .rotate-prompt {
+      display: none;
+      position: absolute;
+      top: 0; left: 0; width: 100%; height: 100%;
+      background: rgba(0,0,0,0.95);
+      color: white;
+      flex-direction: column;
+      align-items: center;
+      justify-content: center;
+      z-index: 10000;
+      font-size: 20px;
+      font-weight: bold;
+      text-align: center;
+      padding: 20px;
+    }
+    @media screen and (orientation: portrait) {
+      #arena-view .rotate-prompt { display: flex !important; }
+      #arena-view .arena-content { display: none !important; }
+    }
+
+    .arena-content {
+      position: relative;
+      width: 100%; height: 100%;
+    }
+
+    .canvas-container {
+      position: absolute;
+      top: 0; left: 0; width: 100%; height: 100%;
+      display: flex; align-items: center; justify-content: center;
+    }
+    canvas {
+      display: block;
+      width: 100%; height: auto;
+      max-height: 100%;
+      aspect-ratio: 432 / 304;
+      object-fit: contain;
+      background: #0f172a;
+      image-rendering: auto;
+      box-shadow: 0 12px 36px rgba(0, 0, 0, 0.6);
+      border-radius: 8px;
+    }
+
+    /* 頂部賽程 HUD */
+    .arena-hud {
+      position: absolute;
+      top: 8px; left: 50%; transform: translateX(-50%);
+      background: linear-gradient(135deg, rgba(245, 158, 11, 0.92), rgba(180, 83, 9, 0.92));
+      color: white;
+      padding: 4px 16px;
+      border-radius: 20px;
+      font-size: 12px; font-weight: 900;
+      box-shadow: 0 4px 16px rgba(245, 158, 11, 0.4);
+      z-index: 30;
+      border: 1px solid rgba(255,255,255,0.4);
+    }
+
+    /* 分數板 */
+    .score-badge {
+      position: absolute;
+      top: 12px;
+      z-index: 30;
+      display: flex; flex-direction: column; align-items: center; justify-content: center;
+      background: rgba(15, 23, 42, 0.85);
+      backdrop-filter: blur(10px);
+      border-radius: 14px;
+      padding: 6px 14px;
+      min-width: 80px;
+      user-select: none;
+      pointer-events: none;
+    }
+    .score-badge.player-badge {
+      left: 60px;
+      border: 2px solid rgba(56, 189, 248, 0.85);
+      box-shadow: 0 0 16px rgba(56, 189, 248, 0.4);
+    }
+    .score-badge.comp-badge {
+      right: 18px;
+      border: 2px solid rgba(244, 63, 94, 0.85);
+      box-shadow: 0 0 16px rgba(244, 63, 94, 0.4);
+    }
+    .badge-label {
+      font-size: 12px; font-weight: 900; margin-bottom: 2px;
+      max-width: 100px; white-space: nowrap; overflow: hidden; text-overflow: ellipsis;
+    }
+    .player-badge .badge-label { color: #38bdf8; }
+    .comp-badge .badge-label { color: #fb7185; }
+    .badge-score {
+      font-family: 'Press Start 2P', monospace;
+      font-size: 24px; font-weight: bold; line-height: 1.1;
+    }
+    .player-badge .badge-score { color: #38bdf8; text-shadow: 0 0 12px rgba(56, 189, 248, 0.9); }
+    .comp-badge .badge-score { color: #fb7185; text-shadow: 0 0 12px rgba(244, 63, 94, 0.9); }
+
+    /* 觀戰者加油互動按鈕列 */
+    .spectator-bar {
+      position: absolute;
+      bottom: 20px;
+      left: 50%;
+      transform: translateX(-50%);
+      z-index: 40;
+      display: flex;
+      align-items: center;
+      gap: 12px;
+      background: rgba(15, 23, 42, 0.88);
+      backdrop-filter: blur(12px);
+      border: 1px solid rgba(255,255,255,0.25);
+      padding: 8px 18px;
+      border-radius: 30px;
+      box-shadow: 0 8px 30px rgba(0,0,0,0.6);
+    }
+    .spectator-label { font-size: 13px; font-weight: 900; color: #facc15; }
+    .cheer-btn {
+      background: rgba(255,255,255,0.15);
+      border: 1px solid rgba(255,255,255,0.3);
+      border-radius: 50%;
+      width: 44px; height: 44px;
+      font-size: 22px;
+      cursor: pointer;
+      display: flex; align-items: center; justify-content: center;
+      transition: all 0.15s;
+    }
+    .cheer-btn:active { transform: scale(1.25); }
+
+    /* 玩家操作手把 */
+    .controls {
+      position: absolute;
+      bottom: 25px; left: 0; width: 100%;
+      display: flex; justify-content: space-between; padding: 0 35px;
+      z-index: 25; pointer-events: none; box-sizing: border-box;
+    }
+    .controls .action { display: flex; align-items: flex-end; pointer-events: auto; }
+    .btn-hit {
+      width: 85px; height: 85px; border-radius: 50%;
+      background: rgba(220, 38, 38, 0.35); border: 2px solid rgba(255, 255, 255, 0.6);
+      color: white; font-size: 24px; font-weight: bold; font-family: 'Press Start 2P', cursive;
+      display: flex; align-items: center; justify-content: center;
+      user-select: none; touch-action: manipulation;
+    }
+    .btn-hit:active { background: rgba(220, 38, 38, 0.75); }
+
+    .controls .dpad {
+      display: grid; grid-template-columns: 58px 58px 58px; grid-template-rows: 58px 58px;
+      gap: 8px; pointer-events: auto;
+    }
+    .btn-dir {
+      background: rgba(255, 255, 255, 0.18); border: 2px solid rgba(255, 255, 255, 0.45);
+      border-radius: 12px; display: flex; align-items: center; justify-content: center;
+      user-select: none; touch-action: manipulation; color: white; font-size: 22px;
+    }
+    .btn-dir:active { background: rgba(255, 255, 255, 0.55); }
+    #btn-up { grid-column: 2; grid-row: 1; }
+    #btn-left { grid-column: 1; grid-row: 2; }
+    #btn-down { grid-column: 2; grid-row: 2; }
+    #btn-right { grid-column: 3; grid-row: 2; }
+
+    /* 浮動愛心與拍手動畫 */
+    .floating-emoji {
+      position: absolute;
+      bottom: 60px;
+      font-size: 36px;
+      pointer-events: none;
+      animation: floatUp 2s ease-out forwards;
+      z-index: 50;
+    }
+    @keyframes floatUp {
+      0% { opacity: 1; transform: translateY(0) scale(0.6); }
+      50% { transform: translateY(-80px) scale(1.3) rotate(15deg); }
+      100% { opacity: 0; transform: translateY(-180px) scale(1.8) rotate(-15deg); }
+    }
+
+    /* 彈窗結算 */
+    .modal-overlay {
+      position: absolute;
+      top: 0; left: 0; width: 100%; height: 100%;
+      background: rgba(0, 0, 0, 0.85);
+      backdrop-filter: blur(8px);
+      z-index: 200;
+      display: none;
+      align-items: center; justify-content: center;
+    }
+    .modal-card {
+      background: rgba(15, 23, 42, 0.95);
+      border: 2px solid rgba(255, 255, 255, 0.2);
+      border-radius: 20px;
+      padding: 24px 30px;
+      text-align: center;
+      max-width: 320px; width: 85%;
+      color: white;
+    }
+    .modal-icon { font-size: 52px; margin-bottom: 8px; }
+    .modal-title { font-size: 22px; font-weight: 900; margin-bottom: 6px; }
+    .modal-desc { font-size: 13px; color: rgba(255,255,255,0.8); margin-bottom: 20px; line-height: 1.5; }
+    .modal-btn {
+      width: 100%; padding: 12px; border-radius: 12px; border: none;
+      font-size: 15px; font-weight: 900; cursor: pointer;
+      background: linear-gradient(135deg, #f59e0b, #d97706); color: white;
+    }
+  </style>
+</head>
+<body>
+  <!-- ─── 1. 大廳等待室 ─── -->
+  <div id="lobby-view" class="lobby-view">
+    <div class="header">
+      <div class="header-left">
+        <button class="header-btn" onclick="window.location.href='./lobby.html'">🔙</button>
+        <h2 style="font-size: 17px; font-weight: 900; margin: 0;">婚禮錦標賽房間</h2>
+      </div>
+      <div id="room-status-badge" style="font-size: 12px; font-weight: 700; color: #f59e0b;">等待選手加入...</div>
+    </div>
+
+    <div class="room-banner animate-scaleIn" style="margin-top: 14px;">
+      <h1>🏆 婚禮羽球錦標賽</h1>
+      <p>4 強單淘汰制 · 爭奪婚禮羽球總冠軍！</p>
+    </div>
+
+    <!-- 4 強對陣表 -->
+    <div class="bracket-container animate-fadeInUp">
+      <div class="bracket-title">
+        <span>對陣表 (BRACKET)</span>
+        <span id="seat-count">0 / 4 位選手</span>
+      </div>
+
+      <div class="bracket-grid">
+        <!-- 準決賽 1: 席位 1 vs 席位 2 -->
+        <div class="slot-card" id="slot-0">
+          <div class="slot-num">席位 1</div>
+          <div class="slot-name">點擊加入</div>
+          <div class="slot-pts"></div>
+        </div>
+        <div class="vs-divider">VS</div>
+        <div class="slot-card" id="slot-1">
+          <div class="slot-num">席位 2</div>
+          <div class="slot-name">點擊加入</div>
+          <div class="slot-pts"></div>
+        </div>
+
+        <!-- 準決賽 2: 席位 3 vs 席位 4 -->
+        <div class="slot-card" id="slot-2" style="margin-top: 12px;">
+          <div class="slot-num">席位 3</div>
+          <div class="slot-name">點擊加入</div>
+          <div class="slot-pts"></div>
+        </div>
+        <div class="vs-divider" style="margin-top: 12px;">VS</div>
+        <div class="slot-card" id="slot-3" style="margin-top: 12px;">
+          <div class="slot-num">席位 4</div>
+          <div class="slot-name">點擊加入</div>
+          <div class="slot-pts"></div>
+        </div>
+      </div>
+    </div>
+
+    <!-- 操作按鈕群 -->
+    <div class="action-group animate-fadeInUp">
+      <button class="btn-action btn-primary-action" id="btn-start-tournament">
+        <span>🚀</span> 開始錦標賽 (人滿可開賽)
+      </button>
+      <button class="btn-action btn-secondary-action" id="btn-shuffle-slots">
+        <span>🎲</span> 隨機抽籤擺位 (SHUFFLE)
+      </button>
+      <button class="btn-action btn-secondary-action" id="btn-fill-ai">
+        <span>🤖</span> 一鍵補滿伴郎伴娘 AI
+      </button>
+      <button class="btn-action btn-secondary-action" id="btn-reset-bracket" style="color: #ef4444;">
+        <span>🔄</span> 清空席位重新報名
+      </button>
+    </div>
+  </div>
+
+  <!-- ─── 2. 比賽與觀戰全螢幕 ─── -->
+  <div id="arena-view">
+    <div class="rotate-prompt">
+      <div style="font-size: 52px; margin-bottom: 12px;">🔄</div>
+      <div style="font-family: 'Press Start 2P', cursive; font-size: 13px; line-height: 2;">PLEASE ROTATE<br>YOUR DEVICE</div>
+      <p style="font-size: 13px; color: #94a3b8; margin-top: 10px;">請將手機轉為橫向以享受最佳對戰/觀戰體驗</p>
+    </div>
+
+    <div class="arena-content">
+      <!-- 退出返回按鈕 -->
+      <button class="header-btn" id="btn-exit-arena" style="position: absolute; top: 12px; left: 12px; z-index: 40; color:white; background:rgba(0,0,0,0.6);">🔙</button>
+
+      <!-- 賽程 HUD -->
+      <div class="arena-hud" id="arena-hud">
+        🏆 <span id="arena-stage-title">準決賽 第一場</span>
+      </div>
+
+      <!-- 畫布 -->
+      <div class="canvas-container">
+        <canvas id="game-canvas"></canvas>
+      </div>
+
+      <!-- 雙方名字與比分 -->
+      <div class="score-badge player-badge">
+        <div class="badge-label" id="arena-p1-name">👦 選手 A</div>
+        <div class="badge-score" id="arena-p1-score">0</div>
+      </div>
+      <div class="score-badge comp-badge">
+        <div class="badge-label" id="arena-p2-name">👧 選手 B</div>
+        <div class="badge-score" id="arena-p2-score">0</div>
+      </div>
+
+      <!-- 參賽選手專屬虛擬手把 -->
+      <div class="controls" id="arena-controls" style="display: none;">
+        <div class="action">
+          <button class="btn-hit" id="btn-hit">A</button>
+        </div>
+        <div class="dpad">
+          <button class="btn-dir" id="btn-up">⬆️</button>
+          <button class="btn-dir" id="btn-left">⬅️</button>
+          <div class="dpad-center"></div>
+          <button class="btn-dir" id="btn-right">➡️</button>
+          <button class="btn-dir" id="btn-down">⬇️</button>
+        </div>
+      </div>
+
+      <!-- 觀戰賓客專屬加油互動列 -->
+      <div class="spectator-bar" id="spectator-bar">
+        <span class="spectator-label">👁️ 觀戰中：</span>
+        <button class="cheer-btn" data-emoji="👏" title="拍手鼓掌">👏</button>
+        <button class="cheer-btn" data-emoji="💖" title="飄愛心">💖</button>
+        <button class="cheer-btn" data-emoji="🎉" title="灑花慶祝">🎉</button>
+        <button class="cheer-btn" data-emoji="💍" title="新人祝福">💍</button>
+      </div>
+
+      <!-- 彈窗結算 (單場/總決賽) -->
+      <div class="modal-overlay" id="arena-modal">
+        <div class="modal-card">
+          <div class="modal-icon" id="arena-modal-icon">🎉</div>
+          <div class="modal-title" id="arena-modal-title">伴郎大明 獲勝！</div>
+          <div class="modal-desc" id="arena-modal-desc">晉級婚禮總決賽！獲得 +3 積分！</div>
+          <button class="modal-btn" id="arena-modal-btn">進入下一場 ➔</button>
+        </div>
+      </div>
+    </div>
+  </div>
+
+  <script type="module" src="./tournament.js"></script>
+</body>
+</html>

@@ -1,8 +1,23 @@
-import { db, ref, update, increment } from './firebase.js';
+import { db, ref, onValue, update, increment } from './firebase.js';
 import { BadmintonEngine } from './badmintonEngine.js';
+import { calculateRankedPoints } from './rankedScore.js';
 
-const uid = localStorage.getItem('wbc_uid');
+const uid = localStorage.getItem('wbc_uid') || ('user_' + Math.floor(Math.random() * 1000000));
 const nickname = localStorage.getItem('wbc_nickname') || '新郎';
+localStorage.setItem('wbc_uid', uid);
+localStorage.setItem('wbc_nickname', nickname);
+
+let myPoints = Number(localStorage.getItem('wbc_points')) || 0;
+
+if (uid) {
+  onValue(ref(db, 'players/' + uid), snap => {
+    const d = snap.val();
+    if (d && d.points !== undefined) {
+      myPoints = d.points;
+      localStorage.setItem('wbc_points', myPoints);
+    }
+  });
+}
 
 // 取得遊戲模式 (tournament = 錦標賽, quick = 快速對戰)
 const urlParams = new URLSearchParams(window.location.search);
@@ -230,21 +245,29 @@ function handleMatchResult(playerWon) {
       };
     }
   } else {
-    // 快速對戰模式結果
+    // 挑戰電腦 (新娘 KAY) 模式
+    const kayPoints = 15;
     if (playerWon) {
+      const scoreResult = calculateRankedPoints(myPoints, kayPoints);
       if (uid) {
         update(ref(db, 'players/' + uid), {
-          points: increment(50),
+          points: increment(scoreResult.winnerDelta),
           wins: increment(1)
         }).catch(err => console.error(err));
       }
       modalIcon.innerText = '🎉';
       modalTitle.innerText = '勝利！你打敗了新娘 KAY！';
-      modalDesc.innerText = '精彩的對決！獲得 +50 積分！';
+      modalDesc.innerText = `精湛的球技！獲得 +${scoreResult.winnerDelta} 積分！`;
     } else {
+      const scoreResult = calculateRankedPoints(kayPoints, myPoints);
+      if (uid) {
+        update(ref(db, 'players/' + uid), {
+          points: increment(scoreResult.loserDelta)
+        }).catch(err => console.error(err));
+      }
       modalIcon.innerText = '💀';
       modalTitle.innerText = '新娘 KAY 贏得了這場比賽！';
-      modalDesc.innerText = '新娘的球技太強了！要再挑戰一次嗎？';
+      modalDesc.innerText = `扣除 ${Math.abs(scoreResult.loserDelta)} 積分 (最低 0 分)。要再挑戰一次嗎？`;
     }
     modalBtnNext.innerText = '再戰一場 🏸';
     modalBtnNext.onclick = () => {

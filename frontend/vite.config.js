@@ -9,7 +9,7 @@ export default defineConfig({
         nickname: resolve(import.meta.dirname, 'nickname.html'),
         lobby: resolve(import.meta.dirname, 'lobby.html'),
         game: resolve(import.meta.dirname, 'game.html'),
-        // result: resolve(import.meta.dirname, 'result.html'),
+        tournament: resolve(import.meta.dirname, 'tournament.html'),
         ranking: resolve(import.meta.dirname, 'ranking.html'),
         host: resolve(import.meta.dirname, 'host.html'),
       }
