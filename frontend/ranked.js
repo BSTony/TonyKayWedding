@@ -60,45 +60,123 @@ const RANKED_CONTENDERS = [
   { name: '👰 新娘 KAY 👑', avatar: '👑', ptsOffset: +10, boldness: 6 }
 ];
 
-let currentOpponent = null;
-let gameEngine = null;
+let queueRef = null;
+let matchFound = false;
 
-// 啟動排位配對
+// 啟動排位配對 (優先配對線上真人，超時則配對天梯高手)
 function startMatchmaking() {
   matchingView.style.display = 'block';
   arenaView.style.display = 'none';
   matchModal.style.display = 'none';
+  matchFound = false;
 
-  matchStatusText.textContent = '正在配對實力相當的對手...';
+  matchStatusText.textContent = '🔍 正在搜尋線上真人對手...';
   oppAvatarEl.textContent = '❓';
   oppNameEl.textContent = '搜尋對手中...';
   oppNameEl.style.color = 'var(--text-secondary)';
   oppPtsEl.textContent = '- pts';
 
-  // 模擬 1.8 秒雷達搜尋後配對成功
+  try {
+    queueRef = ref(db, 'rankedQueue/' + uid);
+
+    // 1. 登記進入排位配對隊列
+    set(queueRef, {
+      uid,
+      nickname,
+      points: myPoints,
+      avatar: myAvatarEl.textContent,
+      matchedWith: null,
+      createdAt: Date.now()
+    }).catch(() => {});
+
+    // 2. 監聽自身是否被其他玩家配對
+    onValue(queueRef, (snap) => {
+      if (matchFound) return;
+      const data = snap.val();
+      if (data && data.matchedWith) {
+        matchFound = true;
+        pairWithRealOpponent(data.matchedWith);
+      }
+    });
+
+    // 3. 主動尋找隊列中其他等待中的玩家
+    onValue(ref(db, 'rankedQueue'), (snap) => {
+      if (matchFound) return;
+      const allQueue = snap.val() || {};
+      for (const otherUid in allQueue) {
+        if (otherUid !== uid) {
+          const other = allQueue[otherUid];
+          if (other && !other.matchedWith && (Date.now() - (other.createdAt || 0) < 30000)) {
+            matchFound = true;
+            // 互相綁定
+            update(ref(db, 'rankedQueue/' + otherUid), {
+              matchedWith: { uid, nickname, points: myPoints, avatar: myAvatarEl.textContent }
+            }).catch(() => {});
+            pairWithRealOpponent(other);
+            break;
+          }
+        }
+      }
+    });
+  } catch (err) {
+    console.warn('Firebase RTDB queue initialization error:', err);
+  }
+
+  // 4. 若 4.5 秒內沒有其他真人玩家在排隊，自動匹配天梯挑戰者
   setTimeout(() => {
-    // 隨機挑選天梯對手
-    const randContender = RANKED_CONTENDERS[Math.floor(Math.random() * RANKED_CONTENDERS.length)];
-    const oppPoints = Math.max(0, myPoints + randContender.ptsOffset);
+    if (!matchFound) {
+      matchFound = true;
+      if (queueRef) remove(queueRef).catch(() => {});
+      pairWithAIContender();
+    }
+  }, 4500);
+}
 
-    currentOpponent = {
-      name: randContender.name,
-      avatar: randContender.avatar,
-      points: oppPoints,
-      boldness: randContender.boldness
-    };
+// 配對到真人玩家
+function pairWithRealOpponent(opponent) {
+  if (queueRef) remove(queueRef).catch(() => {});
 
-    oppAvatarEl.textContent = currentOpponent.avatar;
-    oppNameEl.textContent = currentOpponent.name;
-    oppNameEl.style.color = 'var(--text-primary)';
-    oppPtsEl.textContent = currentOpponent.points + ' pts';
+  currentOpponent = {
+    name: opponent.nickname || '線上嘉賓',
+    avatar: opponent.avatar || '🏸',
+    points: opponent.points || 0,
+    boldness: 3
+  };
 
-    matchStatusText.textContent = '🎯 配對成功！即將進入賽場...';
+  oppAvatarEl.textContent = currentOpponent.avatar;
+  oppNameEl.textContent = currentOpponent.name;
+  oppNameEl.style.color = 'var(--text-primary)';
+  oppPtsEl.textContent = currentOpponent.points + ' pts';
 
-    setTimeout(() => {
-      enterArenaMatch();
-    }, 1200);
-  }, 1800);
+  matchStatusText.textContent = `🎯 成功配對真人玩家【${currentOpponent.name}】！`;
+
+  setTimeout(() => {
+    enterArenaMatch();
+  }, 1200);
+}
+
+// 配對到天梯挑戰者 (AI)
+function pairWithAIContender() {
+  const randContender = RANKED_CONTENDERS[Math.floor(Math.random() * RANKED_CONTENDERS.length)];
+  const oppPoints = Math.max(0, myPoints + randContender.ptsOffset);
+
+  currentOpponent = {
+    name: randContender.name,
+    avatar: randContender.avatar,
+    points: oppPoints,
+    boldness: randContender.boldness
+  };
+
+  oppAvatarEl.textContent = currentOpponent.avatar;
+  oppNameEl.textContent = currentOpponent.name;
+  oppNameEl.style.color = 'var(--text-primary)';
+  oppPtsEl.textContent = currentOpponent.points + ' pts';
+
+  matchStatusText.textContent = `🎯 配對到天梯高手【${currentOpponent.name}】！`;
+
+  setTimeout(() => {
+    enterArenaMatch();
+  }, 1200);
 }
 
 // 進入對決賽場

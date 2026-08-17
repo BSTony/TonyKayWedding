@@ -124,17 +124,42 @@
     .player-badge .badge-score { color: #38bdf8; text-shadow: 0 0 12px rgba(56, 189, 248, 0.9); }
     .comp-badge .badge-score { color: #fb7185; text-shadow: 0 0 12px rgba(244, 63, 94, 0.9); }
 
-    /* ─── 虛擬手把按鈕共用樣式 (超大尺寸 + 舒適觸控) ─── */
+    /* ─── 比例式自適應縮放 (Fluid Responsive Sizing via CSS Variables & clamp) ─── */
+    :root {
+      --dpad-cell-size: clamp(56px, 17.5vw, 84px);
+      --dpad-gap: clamp(6px, 2vw, 10px);
+      --dpad-padding: clamp(6px, 2vw, 10px);
+      --dpad-radius: clamp(14px, 4vw, 22px);
+      --dpad-font: clamp(24px, 7.5vw, 36px);
+      --hit-btn-size: clamp(86px, 26vw, 116px);
+      --hit-icon-size: clamp(32px, 9.5vw, 44px);
+      --hit-text-size: clamp(11px, 3.2vw, 14px);
+    }
+
+    @media screen and (orientation: landscape) {
+      :root {
+        --dpad-cell-size: clamp(52px, 17vh, 76px);
+        --dpad-gap: clamp(6px, 1.8vh, 10px);
+        --dpad-padding: clamp(6px, 1.8vh, 10px);
+        --dpad-radius: clamp(12px, 3.5vh, 18px);
+        --dpad-font: clamp(22px, 7vh, 32px);
+        --hit-btn-size: clamp(78px, 24vh, 108px);
+        --hit-icon-size: clamp(28px, 8.5vh, 40px);
+        --hit-text-size: clamp(10px, 3vh, 13px);
+      }
+    }
+
+    /* ─── 虛擬手把按鈕共用樣式 ─── */
     .controls .dpad {
       display: grid;
-      grid-template-columns: 74px 74px 74px;
-      grid-template-rows: 74px 74px;
-      gap: 10px;
+      grid-template-columns: repeat(3, var(--dpad-cell-size));
+      grid-template-rows: repeat(2, var(--dpad-cell-size));
+      gap: var(--dpad-gap);
       pointer-events: auto;
       touch-action: none;
       background: rgba(15, 23, 42, 0.6);
-      padding: 10px;
-      border-radius: 26px;
+      padding: var(--dpad-padding);
+      border-radius: calc(var(--dpad-radius) + 8px);
       backdrop-filter: blur(12px);
       -webkit-backdrop-filter: blur(12px);
       border: 1.5px solid rgba(255, 255, 255, 0.3);
@@ -143,14 +168,14 @@
     .btn-dir {
       background: radial-gradient(circle, rgba(255, 255, 255, 0.25) 0%, rgba(255, 255, 255, 0.09) 100%);
       border: 2px solid rgba(255, 255, 255, 0.6);
-      border-radius: 18px;
+      border-radius: var(--dpad-radius);
       display: flex;
       align-items: center;
       justify-content: center;
       user-select: none;
       touch-action: none;
       color: white;
-      font-size: 32px;
+      font-size: var(--dpad-font);
       box-shadow: 0 4px 14px rgba(0, 0, 0, 0.35), inset 0 1px 2px rgba(255, 255, 255, 0.6);
       transition: transform 0.08s ease, background 0.08s ease;
     }
@@ -172,7 +197,8 @@
       touch-action: none;
     }
     .btn-hit {
-      width: 104px; height: 104px;
+      width: var(--hit-btn-size);
+      height: var(--hit-btn-size);
       border-radius: 50%;
       background: radial-gradient(circle, rgba(239, 68, 68, 0.75) 0%, rgba(185, 28, 28, 0.5) 100%);
       border: 3.5px solid rgba(254, 202, 202, 0.9);
@@ -192,8 +218,8 @@
       background: radial-gradient(circle, rgba(248, 113, 113, 0.98) 0%, rgba(220, 38, 38, 0.85) 100%);
       box-shadow: 0 0 42px rgba(239, 68, 68, 0.95), 0 4px 16px rgba(0,0,0,0.8);
     }
-    .btn-hit-icon { font-size: 38px; line-height: 1; filter: drop-shadow(0 2px 4px rgba(0,0,0,0.4)); }
-    .btn-hit-text { font-size: 13px; font-weight: 900; letter-spacing: 1px; margin-top: 3px; text-shadow: 0 1px 3px rgba(0,0,0,0.8); }
+    .btn-hit-icon { font-size: var(--hit-icon-size); line-height: 1; filter: drop-shadow(0 2px 4px rgba(0,0,0,0.4)); }
+    .btn-hit-text { font-size: var(--hit-text-size); font-weight: 900; letter-spacing: 1px; margin-top: 3px; text-shadow: 0 1px 3px rgba(0,0,0,0.8); }
 
     /* ─── 橫向佈局 (Landscape) ─── */
     @media screen and (orientation: landscape) {
@@ -238,7 +264,7 @@
       }
     }
 
-    /* ─── 直向佈局 (Portrait - 上方球場 + 下方超大手把) ─── */
+    /* ─── 直向佈局 (Portrait - 上方球場 + 下方自適應手把) ─── */
     @media screen and (orientation: portrait) {
       .game-ui {
         display: flex;
@@ -280,7 +306,7 @@
         display: flex !important;
         justify-content: space-between !important;
         align-items: center !important;
-        padding: 16px 16px max(24px, env(safe-area-inset-bottom, 24px)) 16px !important;
+        padding: 14px 16px max(20px, env(safe-area-inset-bottom, 20px)) 16px !important;
         background: rgba(15, 23, 42, 0.92);
         backdrop-filter: blur(16px);
         -webkit-backdrop-filter: blur(16px);
@@ -288,21 +314,6 @@
         box-sizing: border-box;
         z-index: 25;
       }
-      .controls .dpad {
-        grid-template-columns: 80px 80px 80px;
-        grid-template-rows: 80px 80px;
-        gap: 10px;
-        padding: 8px;
-      }
-      .btn-dir {
-        font-size: 36px;
-        border-radius: 20px;
-      }
-      .btn-hit {
-        width: 110px; height: 110px;
-      }
-      .btn-hit-icon { font-size: 42px; }
-      .btn-hit-text { font-size: 14px; }
     }
 
     /* ─── 結算彈窗 ─── */
