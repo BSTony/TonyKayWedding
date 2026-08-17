@@ -49,6 +49,8 @@ const NET_PILLAR_HALF_WIDTH = 25;
 const NET_PILLAR_TOP_TOP_Y_COORD = 176;
 /** @constant @type {number} net pillar top's bottom side y coordinate (this value is on this physics engine only) */
 const NET_PILLAR_TOP_BOTTOM_Y_COORD = 192;
+/** @constant @type {number} 擊球速度比例 (放慢 20% = 0.8) */
+export const BALL_SPEED_SCALE = 0.8;
 
 /**
  * It's for to limit the looping number of the infinite loops.
@@ -480,7 +482,7 @@ function processCollisionBetweenBallAndWorldAndSetBallPosition(ball) {
   }
   ball.y = futureBallY;
   ball.x = ball.x + ball.xVelocity;
-  ball.yVelocity += 1;
+  ball.yVelocity += BALL_SPEED_SCALE;
 
   return false;
 }
@@ -682,15 +684,11 @@ function processCollisionBetweenBallAndPlayer(
   playerState
 ) {
   // playerX is pika's x position
-  // if collision occur,
-  // greater the x position difference between pika and ball,
-  // greater the x velocity of the ball.
+  // 擊球水平速度放慢 20%
   if (ball.x < playerX) {
-    // Since javascript division is float division by default,
-    // Here we use "| 0" to do integer division (refer to: https://stackoverflow.com/a/17218003/8581025)
-    ball.xVelocity = -((Math.abs(ball.x - playerX) / 3) | 0);
+    ball.xVelocity = -Math.round((Math.abs(ball.x - playerX) / 3) * BALL_SPEED_SCALE);
   } else if (ball.x > playerX) {
-    ball.xVelocity = (Math.abs(ball.x - playerX) / 3) | 0;
+    ball.xVelocity = Math.round((Math.abs(ball.x - playerX) / 3) * BALL_SPEED_SCALE);
   }
 
   // If ball velocity x is 0, randomly choose one of -1, 0, 1.
@@ -699,23 +697,25 @@ function processCollisionBetweenBallAndPlayer(
   }
 
   const ballAbsYVelocity = Math.abs(ball.yVelocity);
-  ball.yVelocity = -ballAbsYVelocity;
+  ball.yVelocity = -Math.round(ballAbsYVelocity * BALL_SPEED_SCALE);
 
-  if (ballAbsYVelocity < 15) {
-    ball.yVelocity = -15;
+  const minLaunchY = Math.round(15 * BALL_SPEED_SCALE);
+  if (Math.abs(ball.yVelocity) < minLaunchY) {
+    ball.yVelocity = -minLaunchY;
   }
 
-  // player is jumping and power hitting
+  // player is jumping and power hitting (殺球速度放慢 20%)
   if (playerState === 2) {
+    const spikeSpeedX = Math.round((Math.abs(userInput.xDirection) + 1) * 10 * BALL_SPEED_SCALE);
     if (ball.x < GROUND_HALF_WIDTH) {
-      ball.xVelocity = (Math.abs(userInput.xDirection) + 1) * 10;
+      ball.xVelocity = spikeSpeedX;
     } else {
-      ball.xVelocity = -(Math.abs(userInput.xDirection) + 1) * 10;
+      ball.xVelocity = -spikeSpeedX;
     }
     ball.punchEffectX = ball.x;
     ball.punchEffectY = ball.y;
 
-    ball.yVelocity = Math.abs(ball.yVelocity) * userInput.yDirection * 2;
+    ball.yVelocity = Math.round(Math.abs(ball.yVelocity) * userInput.yDirection * 2 * BALL_SPEED_SCALE);
     ball.punchEffectRadius = BALL_RADIUS;
     // maybe-stereo-sound function FUN_00408470 (0x90) omitted:
     // refer to a detailed comment above about this function
@@ -782,7 +782,7 @@ function calculateExpectedLandingPointXFor(ball) {
       break;
     }
     copyBall.x = copyBall.x + copyBall.xVelocity;
-    copyBall.yVelocity += 1;
+    copyBall.yVelocity += BALL_SPEED_SCALE;
   }
   ball.expectedLandingPointX = copyBall.x;
 }

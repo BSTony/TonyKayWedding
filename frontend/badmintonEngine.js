@@ -78,9 +78,9 @@ export class BadmintonEngine {
       color: Math.random() > 0.4 ? 'rgba(255, 182, 193, 0.85)' : 'rgba(255, 240, 245, 0.92)'
     }));
 
-    // 原版約 30 FPS
+    // 遊戲速度放慢 20% (由 30 FPS 調降至 24 FPS，反應更充裕舒適)
     this.lastFrameTime = 0;
-    this.fpsInterval = 1000 / 30;
+    this.fpsInterval = 1000 / 24;
 
     // 回呼
     this.onScoreUpdate = null;
