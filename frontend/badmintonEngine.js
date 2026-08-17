@@ -635,13 +635,22 @@ export class BadmintonEngine {
   loop(timestamp) {
     if (!this.isRunning) return;
 
-    const elapsed = timestamp - this.lastFrameTime;
-    if (elapsed >= this.fpsInterval) {
-      this.lastFrameTime = timestamp - (elapsed % this.fpsInterval);
+    if (!this.lastFrameTime) this.lastFrameTime = timestamp;
+    let elapsed = timestamp - this.lastFrameTime;
+    this.lastFrameTime = timestamp;
+
+    // 防止切換分頁或背景喚醒時時間累積過大
+    if (elapsed > 200) elapsed = 200;
+
+    this.accumulator = (this.accumulator || 0) + elapsed;
+    const fixedTimeStep = 1000 / 30; // 固定每秒 30 次物理幀 (33.33ms)，與裝置螢幕更新率/解析度 100% 脫鉤
+
+    while (this.accumulator >= fixedTimeStep) {
       this.update();
-      this.draw();
+      this.accumulator -= fixedTimeStep;
     }
 
+    this.draw();
     requestAnimationFrame(this.loop);
   }
 }
