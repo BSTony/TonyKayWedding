@@ -173,18 +173,26 @@ function startMatchmaking() {
   }
 }
 
+let currentRoomId = null;
+let isHostPlayer = false;
+
 // 配對到真人玩家
 function pairWithRealOpponent(opponent) {
   if (elapsedTimer) clearInterval(elapsedTimer);
+
+  const oppKey = opponent.queueKey || opponent.uid;
+  isHostPlayer = queueKey < oppKey;
+  currentRoomId = 'room_' + [queueKey, oppKey].sort().join('_vs_').replace(/[^a-zA-Z0-9_]/g, '_');
+
   setTimeout(() => {
     if (queueRef) remove(queueRef).catch(() => {});
-  }, 2500);
+  }, 3000);
 
   currentOpponent = {
     name: opponent.nickname || '線上嘉賓',
     avatar: opponent.avatar || '🏸',
     points: opponent.points || 0,
-    boldness: 3
+    isRealPlayer: true
   };
 
   oppAvatarEl.textContent = currentOpponent.avatar;
@@ -193,6 +201,16 @@ function pairWithRealOpponent(opponent) {
   oppPtsEl.textContent = currentOpponent.points + ' pts';
 
   matchStatusText.textContent = `🎯 成功配對真人玩家【${currentOpponent.name}】！`;
+
+  // 若為 Host，初始化房間
+  if (isHostPlayer) {
+    set(ref(db, 'rankedRooms/' + currentRoomId), {
+      host: { uid, nickname, points: myPoints },
+      guest: { uid: opponent.uid, nickname: opponent.nickname, points: opponent.points },
+      status: 'playing',
+      createdAt: Date.now()
+    }).catch(() => {});
+  }
 
   setTimeout(() => {
     enterArenaMatch();
@@ -241,7 +259,7 @@ function getDynamicAIContender(pts) {
 
 // 配對到天梯挑戰者 (AI)
 function pairWithAIContender() {
-  if (countdownTimer) clearInterval(countdownTimer);
+  if (elapsedTimer) clearInterval(elapsedTimer);
   const contender = getDynamicAIContender(myPoints);
   const oppPoints = Math.max(0, myPoints + contender.offset);
 
@@ -249,7 +267,8 @@ function pairWithAIContender() {
     name: contender.name,
     avatar: contender.avatar,
     points: oppPoints,
-    boldness: contender.boldness
+    boldness: contender.boldness,
+    isRealPlayer: false
   };
 
   oppAvatarEl.textContent = currentOpponent.avatar;
@@ -266,6 +285,7 @@ function pairWithAIContender() {
 
 window.addEventListener('beforeunload', () => {
   if (queueRef) remove(queueRef).catch(() => {});
+  if (currentRoomId) remove(ref(db, 'rankedRooms/' + currentRoomId)).catch(() => {});
 });
 
 // 進入對決賽場
@@ -292,7 +312,39 @@ function enterArenaMatch() {
     handleRankedGameOver(playerWon);
   };
 
-  gameEngine.start(5, currentOpponent.boldness);
+  // 判定真人連線對打 vs 單人 AI
+  if (currentOpponent.isRealPlayer && currentRoomId) {
+    if (isHostPlayer) {
+      // 🌟 Host 模式：左邊玩家，負責計算物理並向 Firebase 廣播畫面狀態
+      gameEngine.startMultiplayer('host', 5, null, (state) => {
+        update(ref(db, 'rankedRooms/' + currentRoomId + '/state'), state).catch(() => {});
+      });
+
+      // 監聽 Guest 傳來的即時控制指令
+      onValue(ref(db, 'rankedRooms/' + currentRoomId + '/guestInput'), (snap) => {
+        const input = snap.val();
+        if (input && gameEngine) {
+          gameEngine.setRemoteGuestInput(input);
+        }
+      });
+    } else {
+      // 🌟 Guest 模式：右邊玩家，發送按鍵指令並即時同步 Host 的物理畫面
+      gameEngine.startMultiplayer('guest', 5, (input) => {
+        update(ref(db, 'rankedRooms/' + currentRoomId + '/guestInput'), input).catch(() => {});
+      }, null);
+
+      // 接收 Host 的即時畫面同步
+      onValue(ref(db, 'rankedRooms/' + currentRoomId + '/state'), (snap) => {
+        const state = snap.val();
+        if (state && gameEngine) {
+          gameEngine.receiveRemoteState(state);
+        }
+      });
+    }
+  } else {
+    // 單人練習 / AI 對戰模式
+    gameEngine.start(5, currentOpponent.boldness || 3);
+  }
 }
 
 // 處理結算加扣分

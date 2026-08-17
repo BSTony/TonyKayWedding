@@ -85,9 +85,18 @@ export class BadmintonEngine {
     // 回呼
     this.onScoreUpdate = null;
     this.onGameOver = null;
+
+    // 多人連線狀態
+    this.isMultiplayer = false;
+    this.multiplayerRole = 'single'; // 'single' | 'host' | 'guest'
+    this.remoteP2Input = new PikaUserInput();
+    this.onSendState = null;
+    this.onSendInput = null;
   }
 
   start(maxScore = 5, compBoldness = 2) {
+    this.isMultiplayer = false;
+    this.multiplayerRole = 'single';
     this.maxScore = maxScore;
     this.compBoldness = compBoldness;
     this.isRunning = true;
@@ -102,6 +111,83 @@ export class BadmintonEngine {
     requestAnimationFrame(this.loop);
   }
 
+  startMultiplayer(role, maxScore = 5, onSendInput = null, onSendState = null) {
+    this.isMultiplayer = true;
+    this.multiplayerRole = role; // 'host' or 'guest'
+    this.maxScore = maxScore;
+    this.onSendInput = onSendInput;
+    this.onSendState = onSendState;
+    this.isRunning = true;
+    this.roundState = 'playing';
+    this.playerScore = 0;
+    this.compScore = 0;
+    this.punchEffects = [];
+    this.sparkles = [];
+    // 雙方都是真人 (false, false)
+    this.pikaPhysics = new PikaPhysics(false, false);
+    this.lastFrameTime = performance.now();
+    requestAnimationFrame(this.loop);
+  }
+
+  // 接收 Guest 傳給 Host 的輸入指令
+  setRemoteGuestInput(input) {
+    if (!input) return;
+    this.remoteP2Input.xDirection = 0;
+    this.remoteP2Input.yDirection = 0;
+    this.remoteP2Input.powerHit = input.powerHit || 0;
+
+    if (input.left) this.remoteP2Input.xDirection = -1;
+    if (input.right) this.remoteP2Input.xDirection = 1;
+    if (input.up) this.remoteP2Input.yDirection = -1;
+    if (input.down) this.remoteP2Input.yDirection = 1;
+  }
+
+  // Guest 接收 Host 廣播的即時物理畫面與比分
+  receiveRemoteState(state) {
+    if (!state || this.multiplayerRole !== 'guest') return;
+
+    if (state.p1) {
+      this.pikaPhysics.player1.x = state.p1.x;
+      this.pikaPhysics.player1.y = state.p1.y;
+      this.pikaPhysics.player1.state = state.p1.state;
+      this.pikaPhysics.player1.frameNumber = state.p1.frameNumber;
+      this.pikaPhysics.player1.isFacingRight = state.p1.isFacingRight;
+    }
+    if (state.p2) {
+      this.pikaPhysics.player2.x = state.p2.x;
+      this.pikaPhysics.player2.y = state.p2.y;
+      this.pikaPhysics.player2.state = state.p2.state;
+      this.pikaPhysics.player2.frameNumber = state.p2.frameNumber;
+      this.pikaPhysics.player2.isFacingRight = state.p2.isFacingRight;
+    }
+    if (state.ball) {
+      this.pikaPhysics.ball.x = state.ball.x;
+      this.pikaPhysics.ball.y = state.ball.y;
+      this.pikaPhysics.ball.rotation = state.ball.rotation;
+      this.pikaPhysics.ball.isPowerHit = state.ball.isPowerHit;
+    }
+
+    if (state.p1Score !== undefined && state.p2Score !== undefined) {
+      if (this.playerScore !== state.p1Score || this.compScore !== state.p2Score) {
+        this.playerScore = state.p1Score;
+        this.compScore = state.p2Score;
+        if (this.onScoreUpdate) this.onScoreUpdate(this.playerScore, this.compScore);
+      }
+    }
+
+    if (state.roundState && state.roundState !== this.roundState) {
+      this.roundState = state.roundState;
+      if (state.roundState === 'game_over') {
+        // Guest 結算：compScore 為 Guest 得分
+        if (this.onGameOver) this.onGameOver(this.compScore > this.playerScore);
+      }
+    }
+
+    if (state.punch) {
+      this.addPunchEffect(state.punch.x, state.punch.y, state.punch.isPower);
+    }
+  }
+
   stop() {
     this.isRunning = false;
     this.roundState = 'idle';
@@ -111,7 +197,6 @@ export class BadmintonEngine {
    * 觸發攻擊/殺球/撲球指令 (A鍵)
    */
   playerHit() {
-    // 只有在比賽進行中才接受指令，過場期間絕不緩衝，徹底避免下一場開局偷吃指令
     if (this.roundState !== 'playing') return;
     this.powerHitBuffer = 4;
   }
@@ -148,6 +233,22 @@ export class BadmintonEngine {
   update() {
     if (!this.isRunning) return;
 
+    // Guest 模式：發送本地按鍵指令給 Host
+    if (this.multiplayerRole === 'guest') {
+      if (this.onSendInput) {
+        const hit = this.powerHitBuffer > 0 ? 1 : 0;
+        if (this.powerHitBuffer > 0) this.powerHitBuffer--;
+        this.onSendInput({
+          left: this.keys.left,
+          right: this.keys.right,
+          up: this.keys.up,
+          down: this.keys.down,
+          powerHit: hit
+        });
+      }
+      return;
+    }
+
     if (this.roundState !== 'playing') {
       return;
     }
@@ -173,7 +274,8 @@ export class BadmintonEngine {
       p1Input.powerHit = 0;
     }
 
-    const p2Input = new PikaUserInput(); // AI 控制
+    // P2 輸入：若是多人連線由 Remote 提供，否則由 AI 計算
+    const p2Input = this.isMultiplayer ? this.remoteP2Input : new PikaUserInput();
 
     const prevPunchRadius = this.pikaPhysics.ball.punchEffectRadius;
 
@@ -181,18 +283,22 @@ export class BadmintonEngine {
     const isBallTouchingGround = this.pikaPhysics.runEngineForNextFrame([p1Input, p2Input]);
     const b = this.pikaPhysics.ball;
 
+    let newPunch = null;
+
     // 打擊特效觸發
     if (b.punchEffectRadius > 0 && prevPunchRadius === 0) {
       this.addPunchEffect(b.punchEffectX, b.punchEffectY, b.isPowerHit);
+      newPunch = { x: b.punchEffectX, y: b.punchEffectY, isPower: b.isPowerHit };
       b.punchEffectRadius = 0;
     }
 
     // 球落地得分
     if (isBallTouchingGround) {
       b.isPowerHit = false;
-      this.powerHitBuffer = 0; // 落地時立即清空按鍵緩衝，禁止過場吃指令
-      this.keys = { up: false, down: false, left: false, right: false }; // 重置按鍵狀態
+      this.powerHitBuffer = 0;
+      this.keys = { up: false, down: false, left: false, right: false };
       this.addPunchEffect(b.x, 252, false);
+      newPunch = { x: b.x, y: 252, isPower: false };
 
       const ballX = b.x;
       if (ballX < 216) {
@@ -215,17 +321,31 @@ export class BadmintonEngine {
           const p2Serve = ballX < 216;
           this.pikaPhysics.player1.initializeForNewRound();
           this.pikaPhysics.player2.initializeForNewRound();
-          if (this.compBoldness !== undefined) {
+          if (!this.isMultiplayer && this.compBoldness !== undefined) {
             this.pikaPhysics.player2.computerBoldness = this.compBoldness;
           }
           this.pikaPhysics.ball.initializeForNewRound(p2Serve);
-          this.powerHitBuffer = 0; // 下一局開球前徹底確保為 0
+          this.powerHitBuffer = 0;
           this.keys = { up: false, down: false, left: false, right: false };
           this.punchEffects = [];
           this.sparkles = [];
           this.roundState = 'playing';
         }, 1200);
       }
+    }
+
+    // 若為 Host，向 Firebase 廣播即時畫面狀態
+    if (this.isMultiplayer && this.multiplayerRole === 'host' && this.onSendState) {
+      const p2 = this.pikaPhysics.player2;
+      this.onSendState({
+        p1: { x: p1.x, y: p1.y, state: p1.state, frameNumber: p1.frameNumber, isFacingRight: p1.isFacingRight },
+        p2: { x: p2.x, y: p2.y, state: p2.state, frameNumber: p2.frameNumber, isFacingRight: p2.isFacingRight },
+        ball: { x: b.x, y: b.y, rotation: b.rotation, isPowerHit: b.isPowerHit },
+        p1Score: this.playerScore,
+        p2Score: this.compScore,
+        roundState: this.roundState,
+        punch: newPunch
+      });
     }
   }
 
