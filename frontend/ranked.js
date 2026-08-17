@@ -59,6 +59,8 @@ const RANKED_CONTENDERS = [
   { name: '👑【最強王者】新娘 KAY', avatar: '👑', ptsOffset: +10, boldness: 6 }
 ];
 
+let gameEngine = null;
+let currentOpponent = null;
 let queueKey = null;
 let queueRef = null;
 let matchFound = false;
