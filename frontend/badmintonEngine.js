@@ -1,13 +1,12 @@
 import { PikaPhysics, PikaUserInput } from './physics.js';
 
 /**
- * Pikachu Volleyball Engine - 完美復刻
- * 鍵盤操作：方向鍵 / WASD 移動，A 或 X 或 Space 殺球
+ * Pikachu Volleyball Engine - 完美復刻版
  *
  * 原版座標系：
- *   玩家 x,y = 中心點  (64x64 sprite, 所以左上角 = x-32, y-32)
- *   球   x,y = 中心點  (40x40 sprite, 所以左上角 = x-20, y-20)
- *   地板 y = 248 (ground_red 最上緣)
+ *   玩家 x,y = 中心點 (64x64 sprite -> 繪製左上角 = x-32, y-32)
+ *   球   x,y = 中心點 (40x40 sprite -> 繪製左上角 = x-20, y-20)
+ *   地板 y = 248
  *   球落地 y = 252 (BALL_TOUCHING_GROUND_Y_COORD)
  *   玩家站地 y = 244 (PLAYER_TOUCHING_GROUND_Y_COORD)
  *   網柱頂 y = 176 (NET_PILLAR_TOP_TOP_Y_COORD)
@@ -17,11 +16,12 @@ export class BadmintonEngine {
     this.canvas = document.getElementById(canvasId);
     this.ctx = this.canvas.getContext('2d');
 
-    // 固定原版解析度
+    // 固定原版解析度 432x304
     this.canvas.width = 432;
     this.canvas.height = 304;
 
     this.isRunning = false;
+    this.roundState = 'idle'; // 'idle' | 'playing' | 'scoring' | 'game_over'
     this.playerScore = 0;
     this.compScore = 0;
     this.maxScore = 15;
@@ -29,13 +29,16 @@ export class BadmintonEngine {
     // 物理引擎 (player1=左=玩家, player2=右=AI)
     this.pikaPhysics = new PikaPhysics(false, true);
 
-    // 輸入狀態 (hit 是「non-auto-repeated」的 powerHit，需每幀重置)
+    // 輸入狀態與緩衝 (讓按鍵手感極度靈敏，不掉指令)
     this.keys = { up: false, down: false, left: false, right: false };
-    this.powerHitThisFrame = false; // powerHit 只在按下的那一幀有效
+    this.powerHitBuffer = 0; // 緩衝幀數
+
+    // 打擊特效列表 (獨立管理，保證平滑淡出與縮小消失)
+    this.punchEffects = [];
 
     this.loop = this.loop.bind(this);
 
-    // 預載 Sprite Sheet
+    // 載入 Sprite Sheet
     this.spriteImg = new Image();
     this.spriteImg.src = './sprite_sheet.png';
     this.spriteData = null;
@@ -47,11 +50,11 @@ export class BadmintonEngine {
         this.spriteLoaded = true;
       });
 
-    // 原版 30 FPS
+    // 原版約 30 FPS
     this.lastFrameTime = 0;
     this.fpsInterval = 1000 / 30;
 
-    // 雲朵動態位置
+    // 動態雲朵
     this.clouds = [
       { x: 40, y: 38, speed: 0.3 },
       { x: 160, y: 20, speed: 0.2 },
@@ -65,8 +68,10 @@ export class BadmintonEngine {
 
   start() {
     this.isRunning = true;
+    this.roundState = 'playing';
     this.playerScore = 0;
     this.compScore = 0;
+    this.punchEffects = [];
     this.pikaPhysics = new PikaPhysics(false, true);
     this.lastFrameTime = performance.now();
     requestAnimationFrame(this.loop);
@@ -74,37 +79,83 @@ export class BadmintonEngine {
 
   stop() {
     this.isRunning = false;
+    this.roundState = 'idle';
   }
 
-  /** 玩家按下 A/殺球鍵 — 在這幀觸發 powerHit */
+  /**
+   * 觸發攻擊/殺球/撲球指令 (A鍵)
+   * 支援 5 幀 (~160ms) 輸入緩衝，大幅提升手感
+   */
   playerHit() {
-    this.powerHitThisFrame = true;
+    this.powerHitBuffer = 5;
+  }
+
+  /**
+   * 新增一個打擊爆炸特效 (會自動由大變小並漸漸透明消失)
+   */
+  addPunchEffect(x, y) {
+    this.punchEffects.push({
+      x,
+      y,
+      radius: 20,
+      maxRadius: 20,
+      decay: 1.5 // 每幀衰減速度，約 13 幀 (~0.4s) 完全消失
+    });
   }
 
   update() {
     if (!this.isRunning) return;
 
+    // 如果在過場中，不更新球與玩家物理，但畫面動畫繼續跑
+    if (this.roundState !== 'playing') {
+      return;
+    }
+
+    const p1 = this.pikaPhysics.player1;
     const p1Input = new PikaUserInput();
+
     if (this.keys.left)  p1Input.xDirection = -1;
     if (this.keys.right) p1Input.xDirection = 1;
     if (this.keys.up)    p1Input.yDirection = -1;
     if (this.keys.down)  p1Input.yDirection = 1;
-    // powerHit 必須是「非自動重複」的按鍵（只在按下的那一幀為 1）
-    p1Input.powerHit = this.powerHitThisFrame ? 1 : 0;
-    this.powerHitThisFrame = false; // 清除，避免下幀再觸發
 
-    const p2Input = new PikaUserInput(); // AI 由 physicsEngine 內部處理
+    // 處理 powerHit 緩衝
+    if (this.powerHitBuffer > 0) {
+      p1Input.powerHit = 1;
+      this.powerHitBuffer--;
 
+      // 如果在地面且沒按方向鍵按A，自動向面對方向撲球，提升反應
+      if (p1.state === 0 && p1Input.xDirection === 0) {
+        p1Input.xDirection = 1; // 左邊玩家預設向右撲
+      }
+    } else {
+      p1Input.powerHit = 0;
+    }
+
+    const p2Input = new PikaUserInput(); // AI 自動控制
+
+    // 紀錄執行前的 punchEffectRadius
+    const prevPunchRadius = this.pikaPhysics.ball.punchEffectRadius;
+
+    // 執行一幀物理計算
     const isBallTouchingGround = this.pikaPhysics.runEngineForNextFrame([p1Input, p2Input]);
+    const b = this.pikaPhysics.ball;
 
+    // 若物理引擎觸發了新的打擊特效 (例如殺球或落地)
+    if (b.punchEffectRadius > 0 && prevPunchRadius === 0) {
+      this.addPunchEffect(b.punchEffectX, b.punchEffectY);
+      b.punchEffectRadius = 0; // 由我們的特效系統接手管理
+    }
+
+    // 當球落地 (得分判定)
     if (isBallTouchingGround) {
-      // 判斷得分：球落在哪邊，對面得分
-      const ballX = this.pikaPhysics.ball.x;
+      b.isPowerHit = false; // 落地立即取消殘影
+      this.addPunchEffect(b.x, 252); // 在落地點生成小爆炸
+
+      const ballX = b.x;
       if (ballX < 216) {
-        // 球落在左半邊 → 右邊電腦得分
         this.compScore++;
       } else {
-        // 球落在右半邊 → 左邊玩家得分
         this.playerScore++;
       }
 
@@ -113,45 +164,58 @@ export class BadmintonEngine {
       }
 
       if (this.playerScore >= this.maxScore || this.compScore >= this.maxScore) {
-        this.isRunning = false;
+        this.roundState = 'game_over';
         if (this.onGameOver) this.onGameOver(this.playerScore > this.compScore);
       } else {
-        // 停止，1.5 秒後重新發球
-        this.isRunning = false;
+        // 進入得分短暫過場 (畫面不卡頓，雲朵與特效正常淡出)
+        this.roundState = 'scoring';
         setTimeout(() => {
-          // 失分方發球：如果球落在左邊（電腦得分），下一球由電腦（右邊）發
-          const p2Serve = ballX < 216;
+          if (!this.isRunning) return;
+          const p2Serve = ballX < 216; // 失分方發球
           this.pikaPhysics.player1.initializeForNewRound();
           this.pikaPhysics.player2.initializeForNewRound();
           this.pikaPhysics.ball.initializeForNewRound(p2Serve);
-          this.isRunning = true;
-          this.lastFrameTime = performance.now();
-          requestAnimationFrame(this.loop);
-        }, 1500);
+          this.punchEffects = [];
+          this.roundState = 'playing';
+        }, 1200);
       }
     }
   }
 
-  // ─── 繪圖輔助 ──────────────────────────────────────────────
+  // ─── 繪圖系統 ──────────────────────────────────────────────
 
-  drawSprite(name, x, y, flipX = false) {
+  /**
+   * 支援座標、翻轉、自訂寬高與透明度 (alpha)
+   */
+  drawSprite(name, x, y, options = {}) {
     if (!this.spriteLoaded) return;
     const frameData = this.spriteData[name];
     if (!frameData) return;
 
     const f = frameData.frame;
+    const isOldFlip = (typeof options === 'boolean') ? options : false;
+    const flipX = (typeof options === 'object' && options.flipX) || isOldFlip;
+    const w = (typeof options === 'object' && options.w !== undefined) ? options.w : f.w;
+    const h = (typeof options === 'object' && options.h !== undefined) ? options.h : f.h;
+    const alpha = (typeof options === 'object' && options.alpha !== undefined) ? options.alpha : 1.0;
+
+    if (alpha <= 0 || w <= 0 || h <= 0) return;
+
     this.ctx.save();
+    if (alpha < 1.0) {
+      this.ctx.globalAlpha = Math.max(0, Math.min(1, alpha));
+    }
     if (flipX) {
-      this.ctx.translate(x + f.w, y);
+      this.ctx.translate(x + w, y);
       this.ctx.scale(-1, 1);
-      this.ctx.drawImage(this.spriteImg, f.x, f.y, f.w, f.h, 0, 0, f.w, f.h);
+      this.ctx.drawImage(this.spriteImg, f.x, f.y, f.w, f.h, 0, 0, w, h);
     } else {
-      this.ctx.drawImage(this.spriteImg, f.x, f.y, f.w, f.h, x, y, f.w, f.h);
+      this.ctx.drawImage(this.spriteImg, f.x, f.y, f.w, f.h, x, y, w, h);
     }
     this.ctx.restore();
   }
 
-  /** 重複貼一個 tile 填滿指定矩形 */
+  /** 重複貼 tile 填滿指定區域 */
   drawTiledSprite(name, rectX, rectY, rectW, rectH) {
     if (!this.spriteLoaded) return;
     const frameData = this.spriteData[name];
@@ -169,77 +233,74 @@ export class BadmintonEngine {
 
     const ctx = this.ctx;
 
-    // ── 天空背景 ──
+    // ── 1. 天空背景 ──
     ctx.fillStyle = '#70b8e8';
     ctx.fillRect(0, 0, 432, 188);
 
-    // ── 移動的雲朵 ──
+    // ── 2. 動態雲朵 ──
     for (const c of this.clouds) {
       c.x = (c.x + c.speed) % 480;
       this.drawSprite('objects/cloud.png', c.x - 48, c.y);
     }
 
-    // ── 山脈 (y=188) ──
+    // ── 3. 山脈 (y=188) ──
     this.drawSprite('objects/mountain.png', 0, 188);
 
-    // ── 地板 (原版: ground_red 在 y=248，然後 ground_yellow 填下方) ──
+    // ── 4. 地板 (ground_red y=248, ground_yellow y=264) ──
     this.drawTiledSprite('objects/ground_red.png',    0, 248, 432, 16);
     this.drawTiledSprite('objects/ground_yellow.png', 0, 264, 432, 40);
 
-    // ── 網柱 (net_pillar_top 在 176, net_pillar 重複填 184~248) ──
-    const netX = 216 - 4; // 網柱水平中心對齊在 216，柱寬 8
+    // ── 5. 網柱 ──
+    const netX = 216 - 4; // 網柱寬 8px，中心對齊 216
     this.drawTiledSprite('objects/net_pillar_top.png', netX, 176, 8, 8);
     this.drawTiledSprite('objects/net_pillar.png',     netX, 184, 8, 64);
 
-    // ── 玩家陰影 ──
+    // ── 6. 玩家陰影 ──
     const p1 = this.pikaPhysics.player1;
     const p2 = this.pikaPhysics.player2;
-    // 陰影 sprite 是 32x8，繪製在腳底
     this.drawSprite('objects/shadow.png', p1.x - 16, 248);
     this.drawSprite('objects/shadow.png', p2.x - 16, 248);
 
-    // ── 玩家 Pikachu ──
-    // p.x, p.y = 中心點，sprite 64x64 → 左上角 = (x-32, y-32)
+    // ── 7. Pikachu 角色 (座標中心點位移 -32, -32) ──
     const p1State = Math.min(p1.state, 6);
     const p1Frame = p1.frameNumber;
     const p2State = Math.min(p2.state, 6);
     const p2Frame = p2.frameNumber;
 
-    // 確認 sprite 存在再繪製
-    const p1SpriteName = `pikachu/pikachu_${p1State}_${p1Frame}.png`;
-    const p2SpriteName = `pikachu/pikachu_${p2State}_${p2Frame}.png`;
-    this.drawSprite(p1SpriteName, p1.x - 32, p1.y - 32, false);
-    // 右邊玩家水平翻轉
-    this.drawSprite(p2SpriteName, p2.x - 32, p2.y - 32, true);
+    this.drawSprite(`pikachu/pikachu_${p1State}_${p1Frame}.png`, p1.x - 32, p1.y - 32, { flipX: false });
+    this.drawSprite(`pikachu/pikachu_${p2State}_${p2Frame}.png`, p2.x - 32, p2.y - 32, { flipX: true });
 
-    // ── 球 ──
+    // ── 8. 球與殺球殘影 ──
     const b = this.pikaPhysics.ball;
 
-    // 殺球特效 (punch effect) — 每幀縮小 2px，直到消失
-    if (b.punchEffectRadius > 0) {
-      b.punchEffectRadius -= 2; // 模擬原版 view.js 的遞減邏輯
-      const r = b.punchEffectRadius;
-      if (r > 0) {
-        // 以 punchEffectX/Y 為中心，依半徑縮放繪製
-        const scale = r / 20;
-        const sw = 40 * scale;
-        const sh = 40 * scale;
-        this.drawSprite('ball/ball_punch.png',
-          b.punchEffectX - sw / 2,
-          b.punchEffectY - sh / 2
-        );
-      }
-    }
-
-    if (b.isPowerHit) {
-      // 殘影
-      this.drawSprite('ball/ball_trail.png', b.previousPreviousX - 20, b.previousPreviousY - 20);
-      this.drawSprite('ball/ball_trail.png', b.previousX - 20,         b.previousY - 20);
-      this.drawSprite('ball/ball_hyper.png', b.x - 20, b.y - 20);
+    if (b.isPowerHit && this.roundState === 'playing') {
+      // 殺球三段殘影
+      this.drawSprite('ball/ball_trail.png', b.previousPreviousX - 20, b.previousPreviousY - 20, { alpha: 0.35 });
+      this.drawSprite('ball/ball_trail.png', b.previousX - 20,         b.previousY - 20,         { alpha: 0.65 });
+      this.drawSprite('ball/ball_hyper.png', b.x - 20,                 b.y - 20,                 { alpha: 1.0 });
     } else {
       let rot = b.rotation;
-      if (rot < 0 || rot > 4) rot = 0; // 防止 frame 5 (hyper glitch 情況)
+      if (rot < 0 || rot > 4) rot = 0;
       this.drawSprite(`ball/ball_${rot}.png`, b.x - 20, b.y - 20);
+    }
+
+    // ── 9. 打擊爆炸特效 (漸漸縮小並透明消失) ──
+    for (let i = this.punchEffects.length - 1; i >= 0; i--) {
+      const fx = this.punchEffects[i];
+      fx.radius -= fx.decay;
+      const alpha = Math.max(0, fx.radius / fx.maxRadius);
+
+      if (fx.radius <= 0 || alpha <= 0) {
+        this.punchEffects.splice(i, 1);
+        continue;
+      }
+
+      const size = (fx.radius / fx.maxRadius) * 40;
+      this.drawSprite('ball/ball_punch.png', fx.x - size / 2, fx.y - size / 2, {
+        w: size,
+        h: size,
+        alpha: alpha
+      });
     }
   }
 

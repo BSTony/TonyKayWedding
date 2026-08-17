@@ -88,28 +88,57 @@ function startRealBadmintonMode() {
       'ArrowRight': 'right',
       'KeyW': 'up',
       'KeyS': 'down',
-      // 注意: KeyA 保留給攻擊，移動左改用方向鍵或不使用 A
+      'KeyD': 'right',
     };
-    // 攻擊鍵：A / X / Z / Space / Shift
-    const POWER_KEYS = new Set(['KeyA', 'KeyX', 'Space', 'KeyZ', 'ShiftLeft', 'ShiftRight']);
-
+    // 攻擊鍵：A / X / Z / Space / Shift / Enter / J / K
+    const POWER_KEYS = new Set(['KeyA', 'KeyX', 'Space', 'KeyZ', 'ShiftLeft', 'ShiftRight', 'Enter', 'KeyJ', 'KeyK']);
 
     document.addEventListener('keydown', (e) => {
-      if (KEY_MAP[e.code]) {
+      const code = e.code;
+      const key = e.key ? e.key.toLowerCase() : '';
+
+      // 方向鍵
+      if (KEY_MAP[code]) {
         e.preventDefault();
-        gameEngine.keys[KEY_MAP[e.code]] = true;
+        gameEngine.keys[KEY_MAP[code]] = true;
+      } else if (key === 'arrowup' || key === 'w') {
+        e.preventDefault();
+        gameEngine.keys.up = true;
+      } else if (key === 'arrowdown' || key === 's') {
+        e.preventDefault();
+        gameEngine.keys.down = true;
+      } else if (key === 'arrowleft') {
+        e.preventDefault();
+        gameEngine.keys.left = true;
+      } else if (key === 'arrowright' || key === 'd') {
+        e.preventDefault();
+        gameEngine.keys.right = true;
       }
-      if (POWER_KEYS.has(e.code) && !e.repeat) {
+
+      // 攻擊 / 殺球鍵 (A / X / Z / Space / Shift / Enter / J / K)
+      const isAttackKey = POWER_KEYS.has(code) || 
+                          key === 'a' || key === 'x' || key === 'z' || 
+                          key === ' ' || key === 'shift' || key === 'enter' ||
+                          key === 'j' || key === 'k';
+
+      if (isAttackKey) {
         e.preventDefault();
         gameEngine.playerHit();
       }
     });
 
     document.addEventListener('keyup', (e) => {
-      if (KEY_MAP[e.code]) {
+      const code = e.code;
+      const key = e.key ? e.key.toLowerCase() : '';
+
+      if (KEY_MAP[code]) {
         e.preventDefault();
-        gameEngine.keys[KEY_MAP[e.code]] = false;
+        gameEngine.keys[KEY_MAP[code]] = false;
       }
+      if (key === 'arrowup' || key === 'w')    gameEngine.keys.up = false;
+      if (key === 'arrowdown' || key === 's')  gameEngine.keys.down = false;
+      if (key === 'arrowleft')                 gameEngine.keys.left = false;
+      if (key === 'arrowright' || key === 'd') gameEngine.keys.right = false;
     });
 
     // ── 分數 / 遊戲結束回呼 ──────────────────────────────────
