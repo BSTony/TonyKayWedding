@@ -315,29 +315,29 @@ function enterArenaMatch() {
   // 判定真人連線對打 vs 單人 AI
   if (currentOpponent.isRealPlayer && currentRoomId) {
     if (isHostPlayer) {
-      // 🌟 Host 模式：左邊玩家，負責計算物理並向 Firebase 廣播畫面狀態
-      gameEngine.startMultiplayer('host', 5, null, (state) => {
-        update(ref(db, 'rankedRooms/' + currentRoomId + '/state'), state).catch(() => {});
+      // 🌟 Player 1 (左邊玩家，操控左側皮卡丘)
+      gameEngine.startMultiplayer('p1', 5, (input) => {
+        set(ref(db, 'rankedRooms/' + currentRoomId + '/p1Input'), input).catch(() => {});
       });
 
-      // 監聽 Guest 傳來的即時控制指令
-      onValue(ref(db, 'rankedRooms/' + currentRoomId + '/guestInput'), (snap) => {
+      // 即時接收 Player 2 的遠端按鍵輸入
+      onValue(ref(db, 'rankedRooms/' + currentRoomId + '/p2Input'), (snap) => {
         const input = snap.val();
         if (input && gameEngine) {
-          gameEngine.setRemoteGuestInput(input);
+          gameEngine.setRemoteInput('p2', input);
         }
       });
     } else {
-      // 🌟 Guest 模式：右邊玩家，發送按鍵指令並即時同步 Host 的物理畫面
-      gameEngine.startMultiplayer('guest', 5, (input) => {
-        update(ref(db, 'rankedRooms/' + currentRoomId + '/guestInput'), input).catch(() => {});
-      }, null);
+      // 🌟 Player 2 (右邊玩家，操控右側皮卡丘)
+      gameEngine.startMultiplayer('p2', 5, (input) => {
+        set(ref(db, 'rankedRooms/' + currentRoomId + '/p2Input'), input).catch(() => {});
+      });
 
-      // 接收 Host 的即時畫面同步
-      onValue(ref(db, 'rankedRooms/' + currentRoomId + '/state'), (snap) => {
-        const state = snap.val();
-        if (state && gameEngine) {
-          gameEngine.receiveRemoteState(state);
+      // 即時接收 Player 1 的遠端按鍵輸入
+      onValue(ref(db, 'rankedRooms/' + currentRoomId + '/p1Input'), (snap) => {
+        const input = snap.val();
+        if (input && gameEngine) {
+          gameEngine.setRemoteInput('p1', input);
         }
       });
     }
