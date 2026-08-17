@@ -1,0 +1,15 @@
+{
+  "name": "badminton-game-server",
+  "version": "1.0.0",
+  "description": "Authoritative Realtime WebSocket Game Server for Pikachu Badminton",
+  "main": "gameServer.js",
+  "type": "module",
+  "scripts": {
+    "start": "node gameServer.js"
+  },
+  "dependencies": {
+    "dotenv": "^17.4.2",
+    "express": "^4.19.2",
+    "ws": "^8.18.0"
+  }
+}

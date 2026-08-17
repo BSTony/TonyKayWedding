@@ -135,6 +135,83 @@ export class BadmintonEngine {
     requestAnimationFrame(this.loop);
   }
 
+  /**
+   * 🌟 雲端專屬伺服器模式 (Server-Authoritative WebSocket)
+   */
+  startCloudServer(wsUrl, roomId, role = 'p1', maxScore = 5) {
+    this.isMultiplayer = true;
+    this.multiplayerRole = 'cloud';
+    this.cloudRole = role; // 'p1' 或 'p2'
+    this.maxScore = maxScore;
+    this.isRunning = true;
+    this.roundState = 'playing';
+    this.playerScore = 0;
+    this.compScore = 0;
+    this.punchEffects = [];
+    this.sparkles = [];
+    this.pikaPhysics = new PikaPhysics(false, false);
+    this.remoteHostState = null;
+    this.lastInputSendTime = 0;
+    this.lastSentInputKey = '';
+
+    try {
+      this.ws = new WebSocket(wsUrl);
+
+      this.ws.onopen = () => {
+        console.log(`[Cloud Server] 已連線至雲端伺服器: ${wsUrl}`);
+        this.ws.send(JSON.stringify({
+          type: 'join',
+          roomId,
+          role,
+          maxScore
+        }));
+      };
+
+      this.ws.onmessage = (evt) => {
+        try {
+          const data = JSON.parse(evt.data);
+          const t = data.t || data.type;
+
+          if (t === 's') { // 雲端權威狀態廣播
+            this.remoteHostState = data;
+            if (data.s1 !== undefined && data.s2 !== undefined) {
+              if (this.playerScore !== data.s1 || this.compScore !== data.s2) {
+                this.playerScore = data.s1;
+                this.compScore = data.s2;
+                if (this.onScoreUpdate) this.onScoreUpdate(this.playerScore, this.compScore);
+              }
+            }
+            if (data.round && data.round !== this.roundState) {
+              this.roundState = data.round;
+            }
+            if (data.punch) {
+              this.addPunchEffect(data.punch.x, data.punch.y, data.punch.isPower);
+            }
+          } else if (t === 'game_over') {
+            this.roundState = 'game_over';
+            const won = (this.cloudRole === 'p1' && data.winner === 'p1') || (this.cloudRole === 'p2' && data.winner === 'p2');
+            if (this.onGameOver) this.onGameOver(won);
+          }
+        } catch (e) {
+          console.error('[WS Parse Error]', e);
+        }
+      };
+
+      this.ws.onerror = (err) => {
+        console.warn('[Cloud Server] WebSocket 連線異常:', err);
+      };
+
+      this.ws.onclose = () => {
+        console.log('[Cloud Server] WebSocket 連線關閉');
+      };
+    } catch (err) {
+      console.warn('[Cloud Server] 無法建立 WebSocket 連線:', err);
+    }
+
+    this.lastFrameTime = performance.now();
+    requestAnimationFrame(this.loop);
+  }
+
   // Host 接收 Guest 傳來的即時搖桿指令
   setRemoteGuestInput(input) {
     if (!input) return;
@@ -169,6 +246,9 @@ export class BadmintonEngine {
   stop() {
     this.isRunning = false;
     this.roundState = 'idle';
+    if (this.ws) {
+      try { this.ws.close(); } catch (e) {}
+    }
   }
 
   /**
@@ -213,13 +293,106 @@ export class BadmintonEngine {
 
     const now = performance.now();
 
+    // ── 雲端專屬伺服器模式 (Cloud Server Authoritative) ──
+    if (this.multiplayerRole === 'cloud') {
+      if (this.ws && this.ws.readyState === WebSocket.OPEN) {
+        const hit = this.powerHitBuffer > 0 ? 1 : 0;
+        const currentInputKey = `${this.keys.left},${this.keys.right},${this.keys.up},${this.keys.down},${hit}`;
+        if (now - this.lastInputSendTime > 30 || currentInputKey !== this.lastSentInputKey || hit) {
+          this.lastInputSendTime = now;
+          this.lastSentInputKey = currentInputKey;
+          this.ws.send(JSON.stringify({
+            type: 'input',
+            role: this.cloudRole,
+            input: {
+              left: !!this.keys.left,
+              right: !!this.keys.right,
+              up: !!this.keys.up,
+              down: !!this.keys.down,
+              powerHit: hit
+            }
+          }));
+        }
+      }
+
+      if (this.roundState !== 'playing') {
+        return;
+      }
+
+      const p1 = this.pikaPhysics.player1;
+      const p2 = this.pikaPhysics.player2;
+      const b = this.pikaPhysics.ball;
+
+      const p1Input = new PikaUserInput();
+      const p2Input = new PikaUserInput();
+
+      if (this.cloudRole === 'p1') {
+        if (this.keys.left)  p1Input.xDirection = -1;
+        if (this.keys.right) p1Input.xDirection = 1;
+        if (this.keys.up)    p1Input.yDirection = -1;
+        if (this.keys.down)  p1Input.yDirection = 1;
+        if (this.powerHitBuffer > 0) {
+          p1Input.powerHit = 1;
+          this.powerHitBuffer--;
+          if (p1.state === 0 && p1Input.yDirection === 1 && p1Input.xDirection === 0) p1Input.xDirection = 1;
+        }
+      } else {
+        if (this.keys.left)  p2Input.xDirection = -1;
+        if (this.keys.right) p2Input.xDirection = 1;
+        if (this.keys.up)    p2Input.yDirection = -1;
+        if (this.keys.down)  p2Input.yDirection = 1;
+        if (this.powerHitBuffer > 0) {
+          p2Input.powerHit = 1;
+          this.powerHitBuffer--;
+          if (p2.state === 0 && p2Input.yDirection === 1 && p2Input.xDirection === 0) p2Input.xDirection = -1;
+        }
+      }
+
+      this.pikaPhysics.runEngineForNextFrame([p1Input, p2Input]);
+
+      if (this.remoteHostState) {
+        const hs = this.remoteHostState;
+        if (this.cloudRole === 'p1') {
+          if (hs.p2) {
+            p2.x += (hs.p2.x - p2.x) * 0.45;
+            p2.y = hs.p2.y;
+            p2.state = hs.p2.state;
+            p2.frameNumber = hs.p2.frameNumber;
+            p2.divingDirection = hs.p2.divingDirection || -1;
+          }
+        } else {
+          if (hs.p1) {
+            p1.x += (hs.p1.x - p1.x) * 0.45;
+            p1.y = hs.p1.y;
+            p1.state = hs.p1.state;
+            p1.frameNumber = hs.p1.frameNumber;
+            p1.divingDirection = hs.p1.divingDirection || 1;
+          }
+        }
+
+        if (hs.b) {
+          b.x += (hs.b.x - b.x) * 0.45;
+          b.y += (hs.b.y - b.y) * 0.45;
+          if (hs.b.vx !== undefined) b.xVelocity = hs.b.vx;
+          if (hs.b.vy !== undefined) b.yVelocity = hs.b.vy;
+          b.rotation = hs.b.rot || 0;
+          b.isPowerHit = !!hs.b.power;
+          b.previousX = hs.b.px !== undefined ? hs.b.px : b.x;
+          b.previousY = hs.b.py !== undefined ? hs.b.py : b.y;
+          b.previousPreviousX = hs.b.ppx !== undefined ? hs.b.ppx : b.x;
+          b.previousPreviousY = hs.b.ppy !== undefined ? hs.b.ppy : b.y;
+        }
+      }
+      return;
+    }
+
     // ── Guest 訪客模式：本地 60 FPS 物理預測 ＋ 平滑網路矯正 ──
     if (this.multiplayerRole === 'guest') {
       // 1. 發送本地即時搖桿指令給 Host 主機 (有動作立即發送，無動作心跳發送)
       if (this.onSendInput) {
         const hit = this.powerHitBuffer > 0 ? 1 : 0;
         const currentInputKey = `${this.keys.left},${this.keys.right},${this.keys.up},${this.keys.down},${hit}`;
-        if (now - this.lastInputSendTime > 40 || currentInputKey !== this.lastSentInputKey || hit) {
+        if (now - this.lastInputSendTime > 30 || currentInputKey !== this.lastSentInputKey || hit) {
           this.lastInputSendTime = now;
           this.lastSentInputKey = currentInputKey;
           this.onSendInput({

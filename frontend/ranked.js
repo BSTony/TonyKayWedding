@@ -314,32 +314,38 @@ function enterArenaMatch() {
 
   // 判定真人連線對打 vs 單人 AI
   if (currentOpponent.isRealPlayer && currentRoomId) {
-    if (isHostPlayer) {
-      // 🌟 Host 模式：左邊玩家充當權威主機，負責物理運算並廣播畫面狀態給 Guest
-      gameEngine.startMultiplayer('host', 5, null, (state) => {
-        set(ref(db, 'rankedRooms/' + currentRoomId + '/state'), state).catch(() => {});
-      });
+    const role = isHostPlayer ? 'p1' : 'p2';
+    // 優先讀取自訂雲端伺服器 (若為本地則連線本地，線上若有設定環境則直連雲端伺服器)
+    const cloudWsUrl = localStorage.getItem('wbc_cloud_server_url') || (window.location.hostname === 'localhost' ? 'ws://localhost:8080' : null);
 
-      // 即時接收 Guest (右邊玩家) 的搖桿按鍵操作
-      onValue(ref(db, 'rankedRooms/' + currentRoomId + '/guestInput'), (snap) => {
-        const input = snap.val();
-        if (input && gameEngine) {
-          gameEngine.setRemoteGuestInput(input);
-        }
-      });
+    if (cloudWsUrl) {
+      // 🌟 1. 雲端專屬伺服器物理計算 (Server-Authoritative WebSocket)
+      gameEngine.startCloudServer(cloudWsUrl, currentRoomId, role, 5);
     } else {
-      // 🌟 Guest 模式：右邊玩家，發送本地按鍵指令並即時同步 Host 的畫面
-      gameEngine.startMultiplayer('guest', 5, (input) => {
-        set(ref(db, 'rankedRooms/' + currentRoomId + '/guestInput'), input).catch(() => {});
-      }, null);
+      // 🌟 2. 雲端 Firebase 權威模式 (雙端 60 FPS 本地物理預測 ＋ 權威裁判)
+      if (isHostPlayer) {
+        gameEngine.startMultiplayer('host', 5, null, (state) => {
+          set(ref(db, 'rankedRooms/' + currentRoomId + '/state'), state).catch(() => {});
+        });
 
-      // 即時接收 Host 廣播的權威物理畫面與比分 (100% 畫面一致)
-      onValue(ref(db, 'rankedRooms/' + currentRoomId + '/state'), (snap) => {
-        const state = snap.val();
-        if (state && gameEngine) {
-          gameEngine.receiveRemoteState(state);
-        }
-      });
+        onValue(ref(db, 'rankedRooms/' + currentRoomId + '/guestInput'), (snap) => {
+          const input = snap.val();
+          if (input && gameEngine) {
+            gameEngine.setRemoteGuestInput(input);
+          }
+        });
+      } else {
+        gameEngine.startMultiplayer('guest', 5, (input) => {
+          set(ref(db, 'rankedRooms/' + currentRoomId + '/guestInput'), input).catch(() => {});
+        }, null);
+
+        onValue(ref(db, 'rankedRooms/' + currentRoomId + '/state'), (snap) => {
+          const state = snap.val();
+          if (state && gameEngine) {
+            gameEngine.receiveRemoteState(state);
+          }
+        });
+      }
     }
   } else {
     // 單人練習 / AI 對戰模式
