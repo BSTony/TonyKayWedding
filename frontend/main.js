@@ -298,7 +298,7 @@ function handleMatchResult(playerWon) {
       } else {
         // 總冠軍！
         modalIcon.innerText = '👑';
-        modalTitle.innerText = '🏆 恭喜榮獲婚禮羽球大賽總冠軍！';
+        modalTitle.innerText = '🏆 恭喜榮獲婚禮大賽總冠軍！';
         modalDesc.innerText = `成功擊敗新娘 KAY 贏得最高榮耀！獲得 +${roundConfig.rewardPoints} 積分與冠軍獎盃！`;
         modalBtnNext.innerText = '查看排行榜 🏆';
         modalBtnNext.onclick = () => {

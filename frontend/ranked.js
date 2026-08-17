@@ -206,7 +206,7 @@ function getDynamicAIContender(pts) {
     ];
     return contenders[Math.floor(Math.random() * contenders.length)];
   } else if (pts <= 25) {
-    // 🥈 白銀羽球手段位 (11~25 pts)：走位敏捷，主動起跳攔截
+    // 🥈 白銀選手段位 (11~25 pts)：走位敏捷，主動起跳攔截
     const contenders = [
       { name: '👦 伴郎阿豪', avatar: '⚡', offset: 2, boldness: 3 },
       { name: '👧 伴娘萱萱', avatar: '🦋', offset: -2, boldness: 4 }
@@ -230,7 +230,7 @@ function getDynamicAIContender(pts) {
     // 👑 傳奇球王段位 (90+ pts)：神級新娘 KAY，零失誤預判與極限暴扣
     const contenders = [
       { name: '👰 新娘 KAY 👑 (終極神級)', avatar: '👑', offset: 8, boldness: 7 },
-      { name: '⚡ 羽球之神 (殿堂級)', avatar: '🔥', offset: 10, boldness: 7 }
+      { name: '⚡ 競技之神 (殿堂級)', avatar: '🔥', offset: 10, boldness: 7 }
     ];
     return contenders[Math.floor(Math.random() * contenders.length)];
   }

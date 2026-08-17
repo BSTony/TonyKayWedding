@@ -478,7 +478,7 @@ function showMatchResultModal(winner, loser, scoreResult, matchIdx) {
   } else {
     // 總決賽結束，總冠軍出爐！
     arenaModalIcon.textContent = '👑';
-    arenaModalTitle.textContent = `🏆 ${winner.name} 榮登婚禮羽球總冠軍！`;
+    arenaModalTitle.textContent = `🏆 ${winner.name} 榮登婚禮總冠軍！`;
     arenaModalDesc.textContent = `以卓越的球技擊敗對手，贏得最高榮耀與 +${scoreResult.winnerDelta} 積分！祝新婚快樂！`;
     arenaModalBtn.textContent = '查看英雄排行榜 🏆';
     arenaModalBtn.onclick = () => {
