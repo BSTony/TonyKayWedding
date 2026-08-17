@@ -1,0 +1,510 @@
+<!DOCTYPE html>
+<html lang="zh-TW">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no">
+  <title>巔峰排位積分賽 🥇</title>
+  <link rel="stylesheet" href="./style.css">
+  <style>
+    body {
+      overflow-x: hidden;
+      touch-action: manipulation;
+      background: var(--bg-main);
+      color: var(--text-primary);
+      margin: 0; padding: 0;
+      user-select: none;
+    }
+
+    /* ─── 頂部導航 ─── */
+    .header {
+      padding: 14px 18px;
+      display: flex;
+      align-items: center;
+      justify-content: space-between;
+      background: var(--bg-card);
+      box-shadow: var(--shadow);
+      position: sticky;
+      top: 0;
+      z-index: 50;
+    }
+    .header-left { display: flex; align-items: center; gap: 12px; }
+    .header-btn {
+      width: 38px; height: 38px;
+      border-radius: 50%;
+      border: 1px solid var(--border);
+      background: var(--bg-main);
+      font-size: 16px;
+      cursor: pointer;
+      display: flex; align-items: center; justify-content: center;
+    }
+    .header-btn:active { transform: scale(0.92); }
+
+    /* ─── 配對中畫面 ─── */
+    .matching-view {
+      max-width: 480px;
+      margin: 0 auto;
+      padding: 24px 16px;
+      text-align: center;
+    }
+
+    .radar-box {
+      position: relative;
+      width: 140px; height: 140px;
+      margin: 20px auto;
+      display: flex; align-items: center; justify-content: center;
+    }
+    .radar-circle {
+      position: absolute;
+      width: 100%; height: 100%;
+      border-radius: 50%;
+      border: 2px solid #8b5cf6;
+      animation: pulseRadar 1.8s infinite ease-out;
+    }
+    .radar-circle:nth-child(2) { animation-delay: 0.6s; }
+    .radar-circle:nth-child(3) { animation-delay: 1.2s; }
+    .radar-center-icon {
+      font-size: 48px;
+      z-index: 5;
+    }
+    @keyframes pulseRadar {
+      0% { transform: scale(0.4); opacity: 1; }
+      100% { transform: scale(1.6); opacity: 0; }
+    }
+
+    /* 選手對戰卡片 */
+    .vs-card-container {
+      display: flex;
+      align-items: center;
+      justify-content: space-between;
+      background: var(--bg-card);
+      border-radius: var(--radius);
+      padding: 20px;
+      box-shadow: var(--shadow);
+      border: 1px solid var(--border);
+      margin: 24px 0;
+    }
+    .player-side {
+      flex: 1;
+      display: flex; flex-direction: column; align-items: center;
+    }
+    .player-side-avatar {
+      font-size: 44px;
+      margin-bottom: 6px;
+    }
+    .player-side-name {
+      font-size: 15px;
+      font-weight: 900;
+      color: var(--text-primary);
+      margin-bottom: 2px;
+      max-width: 110px;
+      overflow: hidden; text-overflow: ellipsis; white-space: nowrap;
+    }
+    .player-side-pts {
+      font-size: 12px;
+      font-weight: 700;
+      color: #8b5cf6;
+      background: rgba(139, 92, 246, 0.1);
+      padding: 2px 10px;
+      border-radius: 12px;
+    }
+    .vs-badge {
+      font-family: 'Press Start 2P', monospace;
+      font-size: 20px;
+      font-weight: 900;
+      color: #ef4444;
+      padding: 0 10px;
+      text-shadow: 0 2px 8px rgba(239, 68, 68, 0.4);
+    }
+
+    /* 積分規則簡介卡 */
+    .rule-card {
+      background: var(--bg-card);
+      border-radius: var(--radius);
+      padding: 16px;
+      border: 1px solid var(--border);
+      text-align: left;
+      font-size: 13px;
+      line-height: 1.6;
+      color: var(--text-secondary);
+      margin-bottom: 20px;
+    }
+    .rule-title {
+      font-size: 13px;
+      font-weight: 900;
+      color: var(--text-primary);
+      margin-bottom: 8px;
+      display: flex; align-items: center; gap: 6px;
+    }
+    .rule-item { display: flex; justify-content: space-between; margin-bottom: 4px; }
+    .rule-pts-gain { color: #22c55e; font-weight: 700; }
+    .rule-pts-lose { color: #ef4444; font-weight: 700; }
+
+    /* ─── 比賽全螢幕畫面 ─── */
+    #arena-view {
+      display: none;
+      position: fixed;
+      top: 0; left: 0;
+      width: 100vw; height: 100vh;
+      background: #000;
+      z-index: 100;
+    }
+
+    .rotate-prompt {
+      display: none;
+      position: absolute;
+      top: 0; left: 0; width: 100%; height: 100%;
+      background: rgba(0,0,0,0.95);
+      color: white;
+      flex-direction: column;
+      align-items: center;
+      justify-content: center;
+      z-index: 10000;
+      font-size: 20px;
+      font-weight: bold;
+      text-align: center;
+      padding: 20px;
+    }
+    @media screen and (orientation: portrait) {
+      #arena-view .rotate-prompt { display: flex !important; }
+      #arena-view .arena-content { display: none !important; }
+    }
+
+    .arena-content {
+      position: relative;
+      width: 100%; height: 100%;
+    }
+
+    .canvas-container {
+      position: absolute;
+      top: 0; left: 0; width: 100%; height: 100%;
+      display: flex; align-items: center; justify-content: center;
+    }
+    canvas {
+      display: block;
+      width: 100%; height: auto;
+      max-height: 100%;
+      aspect-ratio: 432 / 304;
+      object-fit: contain;
+      background: #0f172a;
+      image-rendering: auto;
+      box-shadow: 0 12px 36px rgba(0, 0, 0, 0.6);
+      border-radius: 8px;
+    }
+
+    /* 頂部排位 HUD */
+    .arena-hud {
+      position: absolute;
+      top: 8px; left: 50%; transform: translateX(-50%);
+      background: linear-gradient(135deg, rgba(139, 92, 246, 0.92), rgba(109, 40, 217, 0.92));
+      color: white;
+      padding: 4px 16px;
+      border-radius: 20px;
+      font-size: 12px; font-weight: 900;
+      box-shadow: 0 4px 16px rgba(139, 92, 246, 0.4);
+      z-index: 30;
+      border: 1px solid rgba(255,255,255,0.4);
+    }
+
+    /* 分數板 */
+    .score-badge {
+      position: absolute;
+      top: 12px;
+      z-index: 30;
+      display: flex; flex-direction: column; align-items: center; justify-content: center;
+      background: rgba(15, 23, 42, 0.85);
+      backdrop-filter: blur(10px);
+      border-radius: 14px;
+      padding: 6px 14px;
+      min-width: 86px;
+      user-select: none;
+      pointer-events: none;
+    }
+    .score-badge.player-badge {
+      left: 60px;
+      border: 2px solid rgba(56, 189, 248, 0.85);
+      box-shadow: 0 0 16px rgba(56, 189, 248, 0.4);
+    }
+    .score-badge.comp-badge {
+      right: 18px;
+      border: 2px solid rgba(244, 63, 94, 0.85);
+      box-shadow: 0 0 16px rgba(244, 63, 94, 0.4);
+    }
+    .badge-label {
+      font-size: 11px; font-weight: 900; margin-bottom: 2px;
+      max-width: 110px; white-space: nowrap; overflow: hidden; text-overflow: ellipsis;
+    }
+    .player-badge .badge-label { color: #38bdf8; }
+    .comp-badge .badge-label { color: #fb7185; }
+    .badge-score {
+      font-family: 'Press Start 2P', monospace;
+      font-size: 24px; font-weight: bold; line-height: 1.1;
+    }
+    .player-badge .badge-score { color: #38bdf8; text-shadow: 0 0 12px rgba(56, 189, 248, 0.9); }
+    .comp-badge .badge-score { color: #fb7185; text-shadow: 0 0 12px rgba(244, 63, 94, 0.9); }
+
+    /* ─── 現代手遊級手把佈局 (左手方向 D-pad ＋ 右手大圓攻擊鈕) ─── */
+    .controls {
+      position: absolute;
+      bottom: 20px; left: 0; width: 100%;
+      display: flex;
+      justify-content: space-between;
+      align-items: flex-end;
+      padding: 0 28px;
+      z-index: 25;
+      pointer-events: none;
+      box-sizing: border-box;
+    }
+
+    .controls .dpad {
+      display: grid;
+      grid-template-columns: 62px 62px 62px;
+      grid-template-rows: 62px 62px;
+      gap: 10px;
+      pointer-events: auto;
+      touch-action: none;
+      background: rgba(15, 23, 42, 0.45);
+      padding: 8px;
+      border-radius: 24px;
+      backdrop-filter: blur(10px);
+      -webkit-backdrop-filter: blur(10px);
+      border: 1.5px solid rgba(255, 255, 255, 0.2);
+      box-shadow: 0 8px 32px rgba(0, 0, 0, 0.5);
+    }
+    .btn-dir {
+      background: radial-gradient(circle, rgba(255, 255, 255, 0.22) 0%, rgba(255, 255, 255, 0.08) 100%);
+      border: 1.5px solid rgba(255, 255, 255, 0.5);
+      border-radius: 16px;
+      display: flex;
+      align-items: center;
+      justify-content: center;
+      user-select: none;
+      touch-action: none;
+      color: white;
+      font-size: 24px;
+      box-shadow: 0 4px 12px rgba(0, 0, 0, 0.3), inset 0 1px 1px rgba(255, 255, 255, 0.5);
+      transition: transform 0.08s ease, background 0.08s ease;
+    }
+    .btn-dir:active, .btn-dir.active {
+      transform: scale(0.88);
+      background: radial-gradient(circle, rgba(56, 189, 248, 0.65) 0%, rgba(14, 165, 233, 0.3) 100%);
+      border-color: #38bdf8;
+      box-shadow: 0 0 18px rgba(56, 189, 248, 0.8);
+    }
+
+    #btn-up { grid-column: 2; grid-row: 1; }
+    #btn-left { grid-column: 1; grid-row: 2; }
+    #btn-down { grid-column: 2; grid-row: 2; }
+    #btn-right { grid-column: 3; grid-row: 2; }
+
+    .controls .action {
+      display: flex;
+      align-items: flex-end;
+      pointer-events: auto;
+      touch-action: none;
+    }
+    .btn-hit {
+      width: 96px; height: 96px;
+      border-radius: 50%;
+      background: radial-gradient(circle, rgba(239, 68, 68, 0.65) 0%, rgba(185, 28, 28, 0.4) 100%);
+      border: 3px solid rgba(254, 202, 202, 0.85);
+      color: white;
+      display: flex;
+      flex-direction: column;
+      align-items: center;
+      justify-content: center;
+      user-select: none;
+      touch-action: none;
+      box-shadow: 0 0 24px rgba(239, 68, 68, 0.6), 0 10px 28px rgba(0, 0, 0, 0.6), inset 0 2px 4px rgba(255, 255, 255, 0.6);
+      transition: transform 0.08s ease, box-shadow 0.08s ease;
+      cursor: pointer;
+    }
+    .btn-hit:active, .btn-hit.active {
+      transform: scale(0.86);
+      background: radial-gradient(circle, rgba(248, 113, 113, 0.95) 0%, rgba(220, 38, 38, 0.8) 100%);
+      box-shadow: 0 0 36px rgba(239, 68, 68, 0.9), 0 4px 12px rgba(0,0,0,0.8);
+    }
+    .btn-hit-icon { font-size: 32px; line-height: 1; filter: drop-shadow(0 2px 4px rgba(0,0,0,0.4)); }
+    .btn-hit-text { font-size: 13px; font-weight: 900; letter-spacing: 1px; margin-top: 2px; text-shadow: 0 1px 3px rgba(0,0,0,0.8); }
+
+    /* ─── 結算彈窗 ─── */
+    .modal-overlay {
+      position: absolute;
+      top: 0; left: 0; width: 100%; height: 100%;
+      background: rgba(0, 0, 0, 0.85);
+      backdrop-filter: blur(8px);
+      z-index: 200;
+      display: none;
+      align-items: center; justify-content: center;
+      animation: fadeIn 0.25s ease;
+    }
+    .modal-card {
+      background: rgba(15, 23, 42, 0.95);
+      border: 2px solid rgba(255, 255, 255, 0.2);
+      border-radius: 20px;
+      padding: 24px 30px;
+      text-align: center;
+      max-width: 320px; width: 85%;
+      color: white;
+    }
+    .modal-icon { font-size: 52px; margin-bottom: 8px; }
+    .modal-title { font-size: 22px; font-weight: 900; margin-bottom: 6px; }
+    .modal-desc { font-size: 13px; color: rgba(255,255,255,0.8); margin-bottom: 20px; line-height: 1.5; }
+    .modal-btns { display: flex; flex-direction: column; gap: 10px; }
+    .modal-btn {
+      padding: 12px;
+      border-radius: 12px;
+      border: none;
+      font-size: 15px;
+      font-weight: 900;
+      cursor: pointer;
+      transition: all 0.15s;
+    }
+    .modal-btn.primary {
+      background: linear-gradient(135deg, #8b5cf6, #6d28d9);
+      color: white;
+      box-shadow: 0 6px 16px rgba(139, 92, 246, 0.4);
+    }
+    .modal-btn.secondary {
+      background: rgba(255,255,255,0.15);
+      color: white;
+    }
+
+    @keyframes fadeIn {
+      from { opacity: 0; }
+      to { opacity: 1; }
+    }
+  </style>
+</head>
+<body>
+  <!-- ─── 1. 配對等待室 ─── -->
+  <div id="matching-view" class="matching-view">
+    <div class="header" style="background:transparent; box-shadow:none; padding:0 0 16px;">
+      <button class="header-btn" onclick="window.location.href='./lobby.html'">🔙</button>
+      <h2 style="font-size: 18px; font-weight: 900; margin: 0;">🥇 巔峰排位積分賽</h2>
+      <div style="width: 38px;"></div>
+    </div>
+
+    <!-- 雷達配對動畫 -->
+    <div class="radar-box">
+      <div class="radar-circle"></div>
+      <div class="radar-circle"></div>
+      <div class="radar-circle"></div>
+      <div class="radar-center-icon">🏸</div>
+    </div>
+
+    <div id="match-status-text" style="font-size: 16px; font-weight: 900; color: #8b5cf6; margin-bottom: 12px;">
+      正在配對實力相當的對手...
+    </div>
+
+    <!-- 選手對戰卡片 -->
+    <div class="vs-card-container animate-scaleIn">
+      <div class="player-side">
+        <div class="player-side-avatar" id="my-avatar">👦</div>
+        <div class="player-side-name" id="my-name">玩家</div>
+        <div class="player-side-pts" id="my-pts">0 pts</div>
+      </div>
+
+      <div class="vs-badge">VS</div>
+
+      <div class="player-side">
+        <div class="player-side-avatar" id="opp-avatar">❓</div>
+        <div class="player-side-name" id="opp-name" style="color:var(--text-secondary);">搜尋對手中...</div>
+        <div class="player-side-pts" id="opp-pts">- pts</div>
+      </div>
+    </div>
+
+    <!-- 積分賽規則卡 -->
+    <div class="rule-card animate-fadeInUp">
+      <div class="rule-title">
+        <span>📊</span> 積分加扣分結算規則
+      </div>
+      <div class="rule-item">
+        <span>🤝 積分相同獲勝</span>
+        <span class="rule-pts-gain">+3 pts (輸 -3)</span>
+      </div>
+      <div class="rule-item">
+        <span>⚡ 積分較高者獲勝</span>
+        <span class="rule-pts-gain">+1 pts (輸 -1)</span>
+      </div>
+      <div class="rule-item">
+        <span>🔥 積分較低者逆轉勝</span>
+        <span class="rule-pts-gain">+5 pts (輸 -5)</span>
+      </div>
+      <div style="font-size: 11px; color: var(--text-secondary); margin-top: 6px;">
+        * 保底機制：所有玩家積分最低為 0 分，絕不扣成負數。
+      </div>
+    </div>
+
+    <button class="main-cta" id="btn-cancel-match" onclick="window.location.href='./lobby.html'" style="background: rgba(255,255,255,0.15); color: var(--text-primary);">
+      取消配對
+    </button>
+  </div>
+
+  <!-- ─── 2. 5分制天梯對決 ─── -->
+  <div id="arena-view">
+    <div class="rotate-prompt">
+      <div style="font-size: 52px; margin-bottom: 12px;">🔄</div>
+      <div style="font-family: 'Press Start 2P', cursive; font-size: 13px; line-height: 2;">PLEASE ROTATE<br>YOUR DEVICE</div>
+      <p style="font-size: 13px; color: #94a3b8; margin-top: 10px;">請將手機轉為橫向以享受最佳對戰體驗</p>
+    </div>
+
+    <div class="arena-content">
+      <button class="header-btn" id="btn-exit-arena" style="position: absolute; top: 12px; left: 12px; z-index: 40; color:white; background:rgba(0,0,0,0.6);">🔙</button>
+
+      <!-- 排位 HUD -->
+      <div class="arena-hud">
+        🥇 巔峰排位賽 · 5 分制決鬥
+      </div>
+
+      <!-- 畫布容器 -->
+      <div class="canvas-container">
+        <canvas id="game-canvas"></canvas>
+      </div>
+
+      <!-- 雙方名字與比分 -->
+      <div class="score-badge player-badge">
+        <div class="badge-label" id="arena-p1-name">👦 玩家 (0 pts)</div>
+        <div class="badge-score" id="arena-p1-score">0</div>
+      </div>
+      <div class="score-badge comp-badge">
+        <div class="badge-label" id="arena-p2-name">👧 對手 (0 pts)</div>
+        <div class="badge-score" id="arena-p2-score">0</div>
+      </div>
+
+      <!-- 手遊經典手把 (左手 D-pad ＋ 右手攻擊圓鈕) -->
+      <div class="controls">
+        <div class="dpad" id="dpad-container">
+          <button class="btn-dir" id="btn-up" data-dir="up">⬆️</button>
+          <button class="btn-dir" id="btn-left" data-dir="left">⬅️</button>
+          <div class="dpad-center"></div>
+          <button class="btn-dir" id="btn-right" data-dir="right">➡️</button>
+          <button class="btn-dir" id="btn-down" data-dir="down">⬇️</button>
+        </div>
+
+        <div class="action">
+          <button class="btn-hit" id="btn-hit">
+            <span class="btn-hit-icon">⚡</span>
+            <span class="btn-hit-text">殺球</span>
+          </button>
+        </div>
+      </div>
+
+      <!-- 結算彈窗 -->
+      <div class="modal-overlay" id="match-modal">
+        <div class="modal-card">
+          <div class="modal-icon" id="modal-icon">🎉</div>
+          <div class="modal-title" id="modal-title">排位賽獲勝！</div>
+          <div class="modal-desc" id="modal-desc">獲得 +5 積分！</div>
+          <div class="modal-btns">
+            <button class="modal-btn primary" id="modal-btn-next">再排一場 ➔</button>
+            <button class="modal-btn secondary" id="modal-btn-rank" onclick="window.location.href='./ranking.html'">查看英雄榜 🏆</button>
+            <button class="modal-btn secondary" id="modal-btn-lobby" onclick="window.location.href='./lobby.html'">返回大廳 🏠</button>
+          </div>
+        </div>
+      </div>
+    </div>
+  </div>
+
+  <script type="module" src="./ranked.js"></script>
+</body>
+</html>

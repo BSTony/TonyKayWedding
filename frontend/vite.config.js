@@ -10,6 +10,7 @@ export default defineConfig({
         lobby: resolve(import.meta.dirname, 'lobby.html'),
         game: resolve(import.meta.dirname, 'game.html'),
         tournament: resolve(import.meta.dirname, 'tournament.html'),
+        ranked: resolve(import.meta.dirname, 'ranked.html'),
         ranking: resolve(import.meta.dirname, 'ranking.html'),
         host: resolve(import.meta.dirname, 'host.html'),
       }
