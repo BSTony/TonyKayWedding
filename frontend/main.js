@@ -44,7 +44,7 @@ playerNameBadge.textContent = '👦 ' + nickname;
 const TOURNAMENT_ROUNDS = [
   {
     stageName: '第一輪 · 八強晉級賽',
-    opponentName: '👦 伴郎皮卡丘',
+    opponentName: '🥉【青銅初階】伴郎皮卡丘',
     targetScore: 5,
     boldness: 1,
     rewardPoints: 50,
@@ -52,17 +52,17 @@ const TOURNAMENT_ROUNDS = [
   },
   {
     stageName: '第二輪 · 四強準決賽',
-    opponentName: '👧 伴娘皮卡丘',
+    opponentName: '🥇【黃金大師】伴娘皮卡丘',
     targetScore: 5,
-    boldness: 2,
+    boldness: 3,
     rewardPoints: 100,
     rewardWins: 1
   },
   {
     stageName: '最終決賽 · 總冠軍爭奪',
-    opponentName: '👰 新娘 KAY 👑',
+    opponentName: '👑【最強王者】新娘 KAY 👑',
     targetScore: 7,
-    boldness: 4,
+    boldness: 5,
     rewardPoints: 300,
     rewardWins: 2
   }

@@ -196,41 +196,41 @@ function pairWithRealOpponent(opponent) {
   }, 1200);
 }
 
-// 根據玩家積分，動態獲取匹配的天梯 AI 對手與強度等級 (強度隨積分直線成長)
+// 根據玩家積分，動態獲取匹配的天梯 AI 對手與強度等級 (以段位命名)
 function getDynamicAIContender(pts) {
   if (pts <= 10) {
-    // 🥉 青銅新手段位 (0~10 pts)：新手伴郎伴娘
+    // 🥉 青銅新手段位 (0~10 pts)
     const contenders = [
-      { name: '👦 伴郎小明', avatar: '🏸', offset: -1, boldness: 2 },
-      { name: '👧 伴娘小芬', avatar: '🌸', offset: 0, boldness: 2 }
+      { name: '🥉【青銅初階】伴郎小明', avatar: '🥉', offset: -1, boldness: 2 },
+      { name: '🥉【青銅先鋒】伴娘小芬', avatar: '🌸', offset: 0, boldness: 2 }
     ];
     return contenders[Math.floor(Math.random() * contenders.length)];
   } else if (pts <= 25) {
-    // 🥈 白銀選手段位 (11~25 pts)：走位敏捷，主動起跳攔截
+    // 🥈 白銀好手段位 (11~25 pts)
     const contenders = [
-      { name: '👦 伴郎阿豪', avatar: '⚡', offset: 2, boldness: 3 },
-      { name: '👧 伴娘萱萱', avatar: '🦋', offset: -2, boldness: 4 }
+      { name: '🥈【白銀好手】伴郎阿豪', avatar: '🥈', offset: 2, boldness: 3 },
+      { name: '🥈【白銀菁英】伴娘萱萱', avatar: '🦋', offset: -2, boldness: 4 }
     ];
     return contenders[Math.floor(Math.random() * contenders.length)];
   } else if (pts <= 50) {
-    // 🥇 黃金高手段位 (26~50 pts)：超強飛撲救險球，對角扣殺
+    // 🥇 黃金大師段位 (26~50 pts)
     const contenders = [
-      { name: '👦 伴郎俊傑 (校隊)', avatar: '🔥', offset: 4, boldness: 5 },
-      { name: '👧 伴娘雅婷 (殺球狂)', avatar: '🎯', offset: 3, boldness: 5 }
+      { name: '🥇【黃金專家】伴郎俊傑', avatar: '🥇', offset: 4, boldness: 5 },
+      { name: '🥇【黃金大師】伴娘雅婷', avatar: '🎯', offset: 3, boldness: 5 }
     ];
     return contenders[Math.floor(Math.random() * contenders.length)];
   } else if (pts <= 90) {
-    // 💎 鑽石大師段位 (51~90 pts)：極速預判落點，高空壓制
+    // 💎 璀璨鑽石段位 (51~90 pts)
     const contenders = [
-      { name: '👦 伴郎總召 (省港球王)', avatar: '⚡', offset: 6, boldness: 6 },
-      { name: '👰 伴娘團長 (殺手級)', avatar: '🌸', offset: 5, boldness: 6 }
+      { name: '💎【璀璨鑽石】伴郎總召', avatar: '💎', offset: 6, boldness: 6 },
+      { name: '💎【星耀宗師】伴娘團長', avatar: '✨', offset: 5, boldness: 6 }
     ];
     return contenders[Math.floor(Math.random() * contenders.length)];
   } else {
-    // 👑 傳奇球王段位 (90+ pts)：神級新娘 KAY，零失誤預判與極限暴扣
+    // 👑 最強王者 / 殿堂傳奇 (90+ pts)
     const contenders = [
-      { name: '👰 新娘 KAY 👑 (終極神級)', avatar: '👑', offset: 8, boldness: 7 },
-      { name: '⚡ 競技之神 (殿堂級)', avatar: '🔥', offset: 10, boldness: 7 }
+      { name: '👑【最強王者】新娘 KAY', avatar: '👑', offset: 8, boldness: 7 },
+      { name: '🏆【神話傳奇】伴郎球神', avatar: '🏆', offset: 10, boldness: 7 }
     ];
     return contenders[Math.floor(Math.random() * contenders.length)];
   }

@@ -45,10 +45,12 @@ const arenaModalTitle = document.getElementById('arena-modal-title');
 const arenaModalDesc = document.getElementById('arena-modal-desc');
 const arenaModalBtn = document.getElementById('arena-modal-btn');
 
-// 預設伴郎伴娘名冊
+// 預設伴郎伴娘名冊 (以段位命名)
 const AI_NAMES = [
-  '👦 伴郎大明', '👧 伴娘小雅', '👦 伴郎阿豪', '👧 伴娘萱萱',
-  '👦 伴郎俊傑', '👧 伴娘佳佳', '👦 伴郎家豪', '👧 伴娘婷婷'
+  '🥉【青銅初階】伴郎小明', '🥉【青銅先鋒】伴娘小芬',
+  '🥈【白銀好手】伴郎阿豪', '🥈【白銀菁英】伴娘萱萱',
+  '🥇【黃金專家】伴郎俊傑', '🥇【黃金大師】伴娘雅婷',
+  '💎【璀璨鑽石】伴郎總召', '👑【最強王者】新娘 KAY'
 ];
 
 // Firebase 錦標賽房間節點
