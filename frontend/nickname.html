@@ -3,7 +3,7 @@
 <head>
   <meta charset="UTF-8">
   <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0">
-  <title>玩家登入 🏆</title>
+  <title>設定你的暱稱 🏆</title>
   <link rel="stylesheet" href="./style.css">
   <style>
     .nickname-page {
@@ -12,63 +12,16 @@
       flex-direction: column;
       align-items: center;
       justify-content: center;
-      gap: 16px;
+      gap: 18px;
       padding-top: 10px;
     }
-    .greet-icon { font-size: 80px; animation: bounce 1.5s ease infinite; }
     .greet-title { font-size: 26px; font-weight: 900; color: var(--primary); }
     .greet-sub { font-size: 14px; color: var(--text-secondary); }
     
-    /* Google 快速登入卡片按鈕 */
-    .btn-google-card {
-      width: 100%;
-      background: #ffffff;
-      color: #1f2937;
-      border: 2px solid #e5e7eb;
-      border-radius: var(--radius);
-      padding: 14px 18px;
-      font-size: 15px;
-      font-weight: 800;
-      display: flex;
-      align-items: center;
-      justify-content: center;
-      gap: 12px;
-      cursor: pointer;
-      box-shadow: 0 4px 12px rgba(0,0,0,0.08);
-      transition: all 0.2s;
-    }
-    .btn-google-card:hover {
-      background: #f9fafb;
-      border-color: #d1d5db;
-      transform: translateY(-1px);
-      box-shadow: 0 6px 16px rgba(0,0,0,0.12);
-    }
-    .btn-google-card:active {
-      transform: scale(0.98);
-    }
-
-    .divider {
-      display: flex;
-      align-items: center;
-      width: 100%;
-      color: var(--text-secondary);
-      font-size: 12px;
-      font-weight: 700;
-      margin: 4px 0;
-    }
-    .divider::before, .divider::after {
-      content: '';
-      flex: 1;
-      border-bottom: 1px solid var(--border);
-    }
-    .divider span {
-      padding: 0 10px;
-    }
-
     .input-group { width: 100%; position: relative; }
     .nickname-input {
       width: 100%;
-      padding: 14px 18px;
+      padding: 16px 18px;
       font-size: 18px;
       font-weight: 700;
       font-family: 'Noto Sans TC', sans-serif;
@@ -91,15 +44,59 @@
       color: var(--text-secondary);
     }
     .avatar-preview {
-      width: 72px; height: 72px;
+      width: 76px; height: 76px;
       border-radius: 50%;
       background: linear-gradient(135deg, var(--primary), var(--primary-dark));
       display: flex; align-items: center; justify-content: center;
-      font-size: 32px;
+      font-size: 34px;
       box-shadow: 0 8px 24px rgba(76,175,125,0.4);
       transition: all 0.3s ease;
       margin-bottom: -4px;
     }
+    
+    .btn-google-card {
+      width: 100%;
+      background: #ffffff;
+      color: #1f2937;
+      border: 2px solid #e5e7eb;
+      border-radius: var(--radius);
+      padding: 14px 18px;
+      font-size: 15px;
+      font-weight: 800;
+      display: flex;
+      align-items: center;
+      justify-content: center;
+      gap: 10px;
+      cursor: pointer;
+      box-shadow: 0 4px 12px rgba(0,0,0,0.08);
+      transition: all 0.2s;
+    }
+    .btn-google-card:hover {
+      background: #f9fafb;
+      border-color: #d1d5db;
+      transform: translateY(-1px);
+    }
+    .btn-google-card:disabled {
+      opacity: 0.5;
+      cursor: not-allowed;
+      transform: none;
+    }
+
+    .divider {
+      display: flex;
+      align-items: center;
+      width: 100%;
+      color: var(--text-secondary);
+      font-size: 12px;
+      font-weight: 700;
+      margin: 2px 0;
+    }
+    .divider::before, .divider::after {
+      content: '';
+      flex: 1;
+      border-bottom: 1px solid var(--border);
+    }
+    .divider span { padding: 0 10px; }
     .hint-text { font-size: 12px; color: var(--text-secondary); text-align: center; line-height: 1.4; }
   </style>
 </head>
@@ -114,37 +111,17 @@
       <div class="avatar-preview animate-scaleIn" id="avatar-preview">🏆</div>
 
       <div class="text-center animate-fadeInUp">
-        <h1 class="greet-title">WELCOME!</h1>
-        <p class="greet-sub">選擇登入方式開始對戰</p>
+        <h1 class="greet-title">HELLO!</h1>
+        <p class="greet-sub">請輸入你想在遊戲中顯示的暱稱</p>
       </div>
 
-      <!-- 1. Google 帳號登入 (非強制，自動保存雲端積分與名稱) -->
-      <div style="width:100%" class="animate-fadeInUp anim-delay-1">
-        <button class="btn-google-card" id="btn-google-login">
-          <svg width="20" height="20" viewBox="0 0 24 24">
-            <path fill="#4285F4" d="M22.56 12.25c0-.78-.07-1.53-.2-2.25H12v4.26h5.92c-.26 1.37-1.04 2.53-2.21 3.31v2.77h3.57c2.08-1.92 3.28-4.74 3.28-8.09z"/>
-            <path fill="#34A853" d="M12 23c2.97 0 5.46-.98 7.28-2.66l-3.57-2.77c-.98.66-2.23 1.06-3.71 1.06-2.86 0-5.29-1.93-6.16-4.53H2.18v2.84C3.99 20.53 7.7 23 12 23z"/>
-            <path fill="#FBBC05" d="M5.84 14.09c-.22-.66-.35-1.36-.35-2.09s.13-1.43.35-2.09V7.06H2.18C1.43 8.55 1 10.22 1 12s.43 3.45 1.18 4.94l2.85-2.22.81-.63z"/>
-            <path fill="#EA4335" d="M12 5.38c1.62 0 3.06.56 4.21 1.64l3.15-3.15C17.45 2.09 14.97 1 12 1 7.7 1 3.99 3.47 2.18 7.06l3.66 2.84c.87-2.6 3.3-4.52 6.16-4.52z"/>
-          </svg>
-          使用 Google 帳號登入 (保存積分)
-        </button>
-        <p class="hint-text" style="margin-top: 6px; color: #10b981; font-weight: 700;">
-          ✨ 自動同步歷史積分、勝場與頭像
-        </p>
-      </div>
-
-      <div class="divider animate-fadeInUp anim-delay-1">
-        <span>或以訪客身分快速遊玩</span>
-      </div>
-
-      <!-- 2. 訪客模式 (不保存積分，每次進入為 0 分) -->
-      <div class="input-group animate-fadeInUp anim-delay-2">
+      <!-- 自訂暱稱輸入框 -->
+      <div class="input-group animate-fadeInUp anim-delay-1">
         <input
           type="text"
           id="nickname-input"
           class="nickname-input"
-          placeholder="輸入訪客暱稱"
+          placeholder="請輸入你的暱稱 (最多10字)"
           maxlength="10"
           autocomplete="off"
           autocorrect="off"
@@ -153,20 +130,37 @@
         <span class="char-count"><span id="char-count">0</span> / 10</span>
       </div>
 
-      <div style="width:100%" class="animate-fadeInUp anim-delay-3">
+      <!-- 登入與進入選項 -->
+      <div style="width:100%; display:flex; flex-direction:column; gap:12px;" class="animate-fadeInUp anim-delay-2">
+        <!-- 1. Google 綁定保存 -->
+        <button class="btn-google-card" id="btn-google-login" disabled>
+          <svg width="20" height="20" viewBox="0 0 24 24">
+            <path fill="#4285F4" d="M22.56 12.25c0-.78-.07-1.53-.2-2.25H12v4.26h5.92c-.26 1.37-1.04 2.53-2.21 3.31v2.77h3.57c2.08-1.92 3.28-4.74 3.28-8.09z"/>
+            <path fill="#34A853" d="M12 23c2.97 0 5.46-.98 7.28-2.66l-3.57-2.77c-.98.66-2.23 1.06-3.71 1.06-2.86 0-5.29-1.93-6.16-4.53H2.18v2.84C3.99 20.53 7.7 23 12 23z"/>
+            <path fill="#FBBC05" d="M5.84 14.09c-.22-.66-.35-1.36-.35-2.09s.13-1.43.35-2.09V7.06H2.18C1.43 8.55 1 10.22 1 12s.43 3.45 1.18 4.94l2.85-2.22.81-.63z"/>
+            <path fill="#EA4335" d="M12 5.38c1.62 0 3.06.56 4.21 1.64l3.15-3.15C17.45 2.09 14.97 1 12 1 7.7 1 3.99 3.47 2.18 7.06l3.66 2.84c.87-2.6 3.3-4.52 6.16-4.52z"/>
+          </svg>
+          以 Google 綁定存檔 (永久保存此暱稱積分)
+        </button>
+
+        <div class="divider">
+          <span>或</span>
+        </div>
+
+        <!-- 2. 訪客快速遊玩 -->
         <button class="btn btn-primary" id="btn-enter" disabled style="background: linear-gradient(135deg, #64748b, #475569);">
-          以訪客進入 (本次積分 0 分起計)
+          以訪客進入 (本次 0 分起計)
         </button>
       </div>
 
       <p class="hint-text" style="font-size: 11px;">
-        💡 訪客模式每次進入積分為 0 分，隨時可在遊戲內升級為 Google 存檔。
+        💡 遊戲內只會顯示你輸入的暱稱，絕不公開 Google 本名或 Email 帳號。
       </p>
     </div>
   </div>
 
   <script type="module">
-    import { db, ref, get, set, auth, googleProvider, signInWithPopup } from './firebase.js';
+    import { db, ref, get, set, update, auth, googleProvider, signInWithPopup } from './firebase.js';
 
     const EMOJIS = ['🏆', '👑', '⚡', '🌸', '🦋', '🎯', '🔥', '🌟', '💪', '🐼'];
     const input = document.getElementById('nickname-input');
@@ -175,35 +169,49 @@
     const charCount = document.getElementById('char-count');
     const avatarPreview = document.getElementById('avatar-preview');
 
-    // ── 1. Google 帳號快速登入 ──
+    input.addEventListener('input', () => {
+      const val = input.value.trim();
+      const len = input.value.length;
+      charCount.textContent = len;
+      btnEnter.disabled = val.length < 1;
+      btnGoogle.disabled = val.length < 1;
+
+      const code = val.charCodeAt(0) || 0;
+      avatarPreview.textContent = EMOJIS[code % EMOJIS.length];
+    });
+
+    // ── 1. Google 帳號綁定自訂暱稱並進入 ──
     btnGoogle.addEventListener('click', async () => {
+      const customNickname = input.value.trim();
+      if (!customNickname) return;
+
       try {
         btnGoogle.disabled = true;
-        btnGoogle.textContent = '⏳ Google 登入連線中...';
+        btnGoogle.textContent = '⏳ Google 連線中...';
 
         const result = await signInWithPopup(auth, googleProvider);
         const user = result.user;
         const googleUid = 'google_' + user.uid;
-        const googleName = user.displayName || 'Google玩家';
-        const photoURL = user.photoURL || '';
 
         // 讀取/同步 Firebase RTDB 雲端積分與戰績
         const playerSnap = await get(ref(db, 'players/' + googleUid));
         let points = 0;
         let wins = 0;
-        let savedNickname = googleName;
 
         if (playerSnap.exists()) {
           const pData = playerSnap.val();
           points = pData.points !== undefined ? pData.points : 0;
           wins = pData.wins !== undefined ? pData.wins : 0;
-          if (pData.nickname) savedNickname = pData.nickname;
+          // 更新此帳號的自訂暱稱
+          await update(ref(db, 'players/' + googleUid), {
+            nickname: customNickname,
+            lastSeen: Date.now()
+          });
         } else {
-          // 首次 Google 登入建立永久存檔
+          // 首次建立存檔
           await set(ref(db, 'players/' + googleUid), {
             uid: googleUid,
-            nickname: savedNickname,
-            photoURL,
+            nickname: customNickname,
             points: 0,
             wins: 0,
             isGoogleUser: true,
@@ -214,8 +222,7 @@
 
         // 保存至本機快取
         localStorage.setItem('wbc_uid', googleUid);
-        localStorage.setItem('wbc_nickname', savedNickname);
-        localStorage.setItem('wbc_photo', photoURL);
+        localStorage.setItem('wbc_nickname', customNickname);
         localStorage.setItem('wbc_is_google', 'true');
         localStorage.setItem('wbc_points', points);
         localStorage.setItem('wbc_wins', wins);
@@ -226,47 +233,36 @@
         btnGoogle.disabled = false;
         btnGoogle.innerHTML = `
           <svg width="20" height="20" viewBox="0 0 24 24"><path fill="#4285F4" d="M22.56 12.25c0-.78-.07-1.53-.2-2.25H12v4.26h5.92c-.26 1.37-1.04 2.53-2.21 3.31v2.77h3.57c2.08-1.92 3.28-4.74 3.28-8.09z"/><path fill="#34A853" d="M12 23c2.97 0 5.46-.98 7.28-2.66l-3.57-2.77c-.98.66-2.23 1.06-3.71 1.06-2.86 0-5.29-1.93-6.16-4.53H2.18v2.84C3.99 20.53 7.7 23 12 23z"/><path fill="#FBBC05" d="M5.84 14.09c-.22-.66-.35-1.36-.35-2.09s.13-1.43.35-2.09V7.06H2.18C1.43 8.55 1 10.22 1 12s.43 3.45 1.18 4.94l2.85-2.22.81-.63z"/><path fill="#EA4335" d="M12 5.38c1.62 0 3.06.56 4.21 1.64l3.15-3.15C17.45 2.09 14.97 1 12 1 7.7 1 3.99 3.47 2.18 7.06l3.66 2.84c.87-2.6 3.3-4.52 6.16-4.52z"/></svg>
-          使用 Google 帳號登入 (保存積分)
+          以 Google 綁定存檔 (永久保存此暱稱積分)
         `;
-        alert('Google 登入連線提示：' + (err.message || err));
+        alert('Google 連線提示：' + (err.message || err));
       }
     });
 
     // ── 2. 訪客模式 (不保存積分，每次進入為 0 分) ──
-    input.addEventListener('input', () => {
-      const val = input.value.trim();
-      const len = input.value.length;
-      charCount.textContent = len;
-      btnEnter.disabled = val.length < 1;
-      const code = val.charCodeAt(0) || 0;
-      avatarPreview.textContent = EMOJIS[code % EMOJIS.length];
-    });
-
     btnEnter.addEventListener('click', () => {
       const nickname = input.value.trim();
       if (!nickname) return;
 
-      // 訪客模式：每次進入產生全新臨時 UID，積分一律歸 0
+      // 訪客模式：每次產生全新臨時 UID，積分歸 0
       const guestUid = 'guest_' + Date.now() + '_' + Math.random().toString(36).slice(2, 6);
       localStorage.setItem('wbc_uid', guestUid);
       localStorage.setItem('wbc_nickname', nickname);
       localStorage.setItem('wbc_points', 0);
       localStorage.setItem('wbc_wins', 0);
-      localStorage.removeItem('wbc_photo');
       localStorage.setItem('wbc_is_google', 'false');
 
       window.location.href = './lobby.html';
     });
 
-    // 若已經是 Google 登入者，代入名字
-    if (localStorage.getItem('wbc_is_google') === 'true') {
-      const saved = localStorage.getItem('wbc_nickname');
-      if (saved) {
-        input.value = saved;
-        input.dispatchEvent(new Event('input'));
-      }
+    // 若本地已有舊暱稱，自動填入
+    const saved = localStorage.getItem('wbc_nickname');
+    if (saved) {
+      input.value = saved;
+      input.dispatchEvent(new Event('input'));
     }
   </script>
 </body>
 </html>
+
 
