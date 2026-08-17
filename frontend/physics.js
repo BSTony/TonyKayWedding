@@ -805,151 +805,101 @@ function letComputerDecideUserInput(player, ball, theOtherPlayer, userInput) {
   userInput.yDirection = 0;
   userInput.powerHit = 0;
 
-  let virtualExpectedLandingPointX = ball.expectedLandingPointX;
-  if (
-    Math.abs(ball.x - player.x) > 100 &&
-    Math.abs(ball.xVelocity) < player.computerBoldness + 5
-  ) {
-    const leftBoundary = Number(player.isPlayer2) * GROUND_HALF_WIDTH;
-    if (
-      (ball.expectedLandingPointX <= leftBoundary ||
-        ball.expectedLandingPointX >=
-          Number(player.isPlayer2) * GROUND_WIDTH + GROUND_HALF_WIDTH) &&
-      player.computerWhereToStandBy === 0
-    ) {
-      // If conditions above met, the computer estimates the proper location to stay as the middle point of their side
-      virtualExpectedLandingPointX =
-        leftBoundary + ((GROUND_HALF_WIDTH / 2) | 0);
-    }
+  const leftBoundary = Number(player.isPlayer2) * GROUND_HALF_WIDTH;
+  const rightBoundary = (Number(player.isPlayer2) + 1) * GROUND_HALF_WIDTH;
+  const myCourtCenter = leftBoundary + ((GROUND_HALF_WIDTH / 2) | 0);
+
+  let targetX = ball.expectedLandingPointX;
+
+  // 若球在對手場內，AI 回防至己方中場
+  const isBallOnOpponentSide = (ball.x < leftBoundary || ball.x > rightBoundary);
+  if (isBallOnOpponentSide && Math.abs(ball.x - player.x) > 80) {
+    targetX = myCourtCenter;
   }
 
-  if (
-    Math.abs(virtualExpectedLandingPointX - player.x) >
-    player.computerBoldness + 8
-  ) {
-    if (player.x < virtualExpectedLandingPointX) {
-      userInput.xDirection = 1;
-    } else {
-      userInput.xDirection = -1;
-    }
-  } else if (rand() % 20 === 0) {
-    player.computerWhereToStandBy = rand() % 2;
+  // 高精準移動跟隨 (消除遲滯，反應更迅速敏捷)
+  if (Math.abs(targetX - player.x) > 3) {
+    userInput.xDirection = player.x < targetX ? 1 : -1;
   }
 
   if (player.state === 0) {
+    // 地面狀態：起跳時機判斷 (主動起跳攔截或高空扣殺)
+    const isBallApproaching = player.isPlayer2 ? (ball.x > GROUND_HALF_WIDTH - 30) : (ball.x < GROUND_HALF_WIDTH + 30);
     if (
-      Math.abs(ball.xVelocity) < player.computerBoldness + 3 &&
-      Math.abs(ball.x - player.x) < PLAYER_HALF_LENGTH &&
-      ball.y > -36 &&
-      ball.y < 10 * player.computerBoldness + 84 &&
-      ball.yVelocity > 0
+      isBallApproaching &&
+      Math.abs(ball.x - player.x) < PLAYER_HALF_LENGTH + 12 &&
+      ball.y > 10 &&
+      ball.y < 210 &&
+      ball.yVelocity > -3
     ) {
-      userInput.yDirection = -1;
+      userInput.yDirection = -1; // 主動起跳
     }
 
-    const leftBoundary = Number(player.isPlayer2) * GROUND_HALF_WIDTH;
-    const rightBoundary = (Number(player.isPlayer2) + 1) * GROUND_HALF_WIDTH;
+    // 飛撲救險球 (當球即將落地且步行無法趕上時)
     if (
-      ball.expectedLandingPointX > leftBoundary &&
-      ball.expectedLandingPointX < rightBoundary &&
-      Math.abs(ball.x - player.x) >
-        player.computerBoldness * 5 + PLAYER_LENGTH &&
-      ball.x > leftBoundary &&
-      ball.x < rightBoundary &&
-      ball.y > 174
+      ball.expectedLandingPointX > leftBoundary - 10 &&
+      ball.expectedLandingPointX < rightBoundary + 10 &&
+      Math.abs(ball.expectedLandingPointX - player.x) > 26 &&
+      ball.y > 125 &&
+      ball.yVelocity > 0
     ) {
-      // If conditions above met, the computer decides to dive!
       userInput.powerHit = 1;
-      if (player.x < ball.x) {
-        userInput.xDirection = 1;
-      } else {
-        userInput.xDirection = -1;
-      }
+      userInput.xDirection = player.x < ball.expectedLandingPointX ? 1 : -1;
     }
   } else if (player.state === 1 || player.state === 2) {
-    if (Math.abs(ball.x - player.x) > 8) {
-      if (player.x < ball.x) {
-        userInput.xDirection = 1;
-      } else {
-        userInput.xDirection = -1;
-      }
+    // 空中狀態：空中微調與重扣
+    if (Math.abs(ball.x - player.x) > 4) {
+      userInput.xDirection = player.x < ball.x ? 1 : -1;
     }
-    if (Math.abs(ball.x - player.x) < 48 && Math.abs(ball.y - player.y) < 48) {
+
+    if (Math.abs(ball.x - player.x) < 56 && Math.abs(ball.y - player.y) < 56) {
       const willInputPowerHit = decideWhetherInputPowerHit(
         player,
         ball,
         theOtherPlayer,
         userInput
       );
-      if (willInputPowerHit === true) {
+      if (willInputPowerHit) {
         userInput.powerHit = 1;
-        if (
-          Math.abs(theOtherPlayer.x - player.x) < 80 &&
-          userInput.yDirection !== -1
-        ) {
-          userInput.yDirection = -1;
-        }
       }
     }
   }
 }
 
 /**
- * FUN_00402630
- * This function is called by {@link letComputerDecideUserInput},
- * and also sets x and y direction user input so that it participate in
- * the decision of the direction of power hit.
- * @param {Player} player the player whom computer controls
- * @param {Ball} ball ball
- * @param {Player} theOtherPlayer The other player
- * @param {PikaUserInput} userInput user input for the player whom computer controls
- * @return {boolean} Will input power hit?
+ * AI 扣殺角度決策：計算 6 種角度中落點距離對手最遠 (最刁鑽) 的攻擊路徑
  */
 function decideWhetherInputPowerHit(player, ball, theOtherPlayer, userInput) {
-  if (rand() % 2 === 0) {
-    for (let xDirection = 1; xDirection > -1; xDirection--) {
-      for (let yDirection = -1; yDirection < 2; yDirection++) {
-        const expectedLandingPointX = expectedLandingPointXWhenPowerHit(
-          xDirection,
-          yDirection,
-          ball
-        );
-        if (
-          (expectedLandingPointX <=
-            Number(player.isPlayer2) * GROUND_HALF_WIDTH ||
-            expectedLandingPointX >=
-              Number(player.isPlayer2) * GROUND_WIDTH + GROUND_HALF_WIDTH) &&
-          Math.abs(expectedLandingPointX - theOtherPlayer.x) > PLAYER_LENGTH
-        ) {
-          userInput.xDirection = xDirection;
-          userInput.yDirection = yDirection;
-          return true;
-        }
-      }
-    }
-  } else {
-    for (let xDirection = 1; xDirection > -1; xDirection--) {
-      for (let yDirection = 1; yDirection > -2; yDirection--) {
-        const expectedLandingPointX = expectedLandingPointXWhenPowerHit(
-          xDirection,
-          yDirection,
-          ball
-        );
-        if (
-          (expectedLandingPointX <=
-            Number(player.isPlayer2) * GROUND_HALF_WIDTH ||
-            expectedLandingPointX >=
-              Number(player.isPlayer2) * GROUND_WIDTH + GROUND_HALF_WIDTH) &&
-          Math.abs(expectedLandingPointX - theOtherPlayer.x) > PLAYER_LENGTH
-        ) {
-          userInput.xDirection = xDirection;
-          userInput.yDirection = yDirection;
-          return true;
+  let bestDist = -1;
+  let bestXDir = 1;
+  let bestYDir = 1;
+
+  const oppLeftBoundary = (1 - Number(player.isPlayer2)) * GROUND_HALF_WIDTH;
+  const oppRightBoundary = oppLeftBoundary + GROUND_HALF_WIDTH;
+
+  for (let xDirection = 1; xDirection >= -1; xDirection--) {
+    for (let yDirection = -1; yDirection <= 1; yDirection++) {
+      const expectedLandingPointX = expectedLandingPointXWhenPowerHit(
+        xDirection,
+        yDirection,
+        ball
+      );
+
+      // 檢查是否落在對手場內
+      if (expectedLandingPointX >= oppLeftBoundary && expectedLandingPointX <= oppRightBoundary) {
+        const dist = Math.abs(expectedLandingPointX - theOtherPlayer.x);
+        if (dist > bestDist) {
+          bestDist = dist;
+          bestXDir = xDirection;
+          bestYDir = yDirection;
         }
       }
     }
   }
-  return false;
+
+  userInput.xDirection = bestXDir;
+  userInput.yDirection = bestYDir;
+  return true;
 }
 
 /**
