@@ -141,6 +141,14 @@ function startRealBadmintonMode() {
       if (key === 'arrowright' || key === 'd') gameEngine.keys.right = false;
     });
 
+    // 視窗失焦時自動清除所有按鍵，避免卡鍵
+    window.addEventListener('blur', () => {
+      if (gameEngine) {
+        gameEngine.keys = { up: false, down: false, left: false, right: false };
+        gameEngine.powerHitBuffer = 0;
+      }
+    });
+
     // ── 分數 / 遊戲結束回呼 ──────────────────────────────────
     gameEngine.onScoreUpdate = (pScore, cScore) => {
       myScoreVsEl.innerText = pScore;

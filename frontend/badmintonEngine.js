@@ -108,7 +108,9 @@ export class BadmintonEngine {
    * 觸發攻擊/殺球/撲球指令 (A鍵)
    */
   playerHit() {
-    this.powerHitBuffer = 5;
+    // 只有在比賽進行中才接受指令，過場期間絕不緩衝，徹底避免下一場開局偷吃指令
+    if (this.roundState !== 'playing') return;
+    this.powerHitBuffer = 4;
   }
 
   /**
@@ -155,14 +157,14 @@ export class BadmintonEngine {
     if (this.keys.up)    p1Input.yDirection = -1;
     if (this.keys.down)  p1Input.yDirection = 1;
 
-    // 處理 powerHit 緩衝
+    // 處理 powerHit (A鍵)
     if (this.powerHitBuffer > 0) {
       p1Input.powerHit = 1;
       this.powerHitBuffer--;
 
-      // 若在地面且沒按方向鍵按A，自動向右撲球
-      if (p1.state === 0 && p1Input.xDirection === 0) {
-        p1Input.xDirection = 1;
+      // 若在地面且按「下+A」，向前撲球
+      if (p1.state === 0 && p1Input.yDirection === 1 && p1Input.xDirection === 0) {
+        p1Input.xDirection = 1; // 玩家面向右邊，向前撲
       }
     } else {
       p1Input.powerHit = 0;
@@ -185,6 +187,8 @@ export class BadmintonEngine {
     // 球落地得分
     if (isBallTouchingGround) {
       b.isPowerHit = false;
+      this.powerHitBuffer = 0; // 落地時立即清空按鍵緩衝，禁止過場吃指令
+      this.keys = { up: false, down: false, left: false, right: false }; // 重置按鍵狀態
       this.addPunchEffect(b.x, 252, false);
 
       const ballX = b.x;
@@ -209,6 +213,8 @@ export class BadmintonEngine {
           this.pikaPhysics.player1.initializeForNewRound();
           this.pikaPhysics.player2.initializeForNewRound();
           this.pikaPhysics.ball.initializeForNewRound(p2Serve);
+          this.powerHitBuffer = 0; // 下一局開球前徹底確保為 0
+          this.keys = { up: false, down: false, left: false, right: false };
           this.punchEffects = [];
           this.sparkles = [];
           this.roundState = 'playing';
@@ -350,14 +356,25 @@ export class BadmintonEngine {
     const ballShadowScale = Math.max(0.3, 1 - ballHeightAboveGround / 220);
     this.drawSmoothShadow(b.x, 251, 14 * ballShadowScale, 5 * ballShadowScale, 0.35 * ballShadowScale);
 
-    // ── 6. Pikachu 角色 (清晰復刻像素繪製) ──
+    // ── 6. Pikachu 角色 (朝向與撲球方向對齊) ──
     const p1State = Math.min(p1.state, 6);
     const p1Frame = p1.frameNumber;
     const p2State = Math.min(p2.state, 6);
     const p2Frame = p2.frameNumber;
 
-    this.drawSprite(`pikachu/pikachu_${p1State}_${p1Frame}.png`, p1.x - 32, p1.y - 32, { flipX: false });
-    this.drawSprite(`pikachu/pikachu_${p2State}_${p2Frame}.png`, p2.x - 32, p2.y - 32, { flipX: true });
+    // 計算朝向：若撲球(state 3)或趴地(state 4)，依 divingDirection 決定面向 (1=向右撲, -1=向左撲)
+    let p1Flip = false; // 左邊玩家預設面向右邊 (球網)
+    if (p1State === 3 || p1State === 4) {
+      p1Flip = (p1.divingDirection === -1); // 向左往後撲時翻轉面向左邊
+    }
+
+    let p2Flip = true; // 右邊玩家預設面向左邊 (球網)
+    if (p2State === 3 || p2State === 4) {
+      p2Flip = (p2.divingDirection === -1); // 向左往前撲時面向左邊，向右往後撲時翻轉面向右邊
+    }
+
+    this.drawSprite(`pikachu/pikachu_${p1State}_${p1Frame}.png`, p1.x - 32, p1.y - 32, { flipX: p1Flip });
+    this.drawSprite(`pikachu/pikachu_${p2State}_${p2Frame}.png`, p2.x - 32, p2.y - 32, { flipX: p2Flip });
 
     // ── 7. 排球與殺球光軌 ──
     if (b.isPowerHit && this.roundState === 'playing') {
