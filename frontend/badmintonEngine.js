@@ -231,11 +231,14 @@ export class BadmintonEngine {
       }
     }
 
-    if (state.round && state.round !== this.roundState) {
-      this.roundState = state.round;
-      if (state.round === 'game_over') {
-        if (this.onGameOver) this.onGameOver(this.compScore > this.playerScore);
+    // 只要達成結算條件或收到結束信號，立即觸發結束事件
+    if ((state.round === 'game_over' || this.playerScore >= this.maxScore || this.compScore >= this.maxScore) && this.roundState !== 'game_over') {
+      this.roundState = 'game_over';
+      if (this.onGameOver) {
+        this.onGameOver(this.compScore > this.playerScore);
       }
+    } else if (state.round && state.round !== this.roundState) {
+      this.roundState = state.round;
     }
 
     if (state.punch) {
@@ -545,6 +548,20 @@ export class BadmintonEngine {
       if (this.playerScore >= this.maxScore || this.compScore >= this.maxScore) {
         this.roundState = 'game_over';
         if (this.onGameOver) this.onGameOver(this.playerScore > this.compScore);
+        if (this.isMultiplayer && this.multiplayerRole === 'host' && this.onSendState) {
+          this.onSendState({
+            p1: { x: p1.x, y: p1.y, state: p1.state, frameNumber: p1.frameNumber, divingDirection: p1.divingDirection },
+            p2: { x: p2.x, y: p2.y, state: p2.state, frameNumber: p2.frameNumber, divingDirection: p2.divingDirection },
+            b: {
+              x: b.x, y: b.y, vx: b.xVelocity, vy: b.yVelocity, rot: b.rotation, power: b.isPowerHit,
+              px: b.previousX, py: b.previousY, ppx: b.previousPreviousX, ppy: b.previousPreviousY
+            },
+            s1: this.playerScore,
+            s2: this.compScore,
+            round: 'game_over',
+            punch: punchEvent
+          });
+        }
       } else {
         this.roundState = 'scoring';
         setTimeout(() => {

@@ -353,13 +353,13 @@ function enterArenaMatch() {
   }
 }
 
-// 處理結算加扣分
+// 處理結算加扣分 (雙方玩家均正常彈出結算視窗)
 function handleRankedGameOver(playerWon) {
   let scoreResult;
 
   if (playerWon) {
     // 玩家獲勝
-    scoreResult = calculateRankedPoints(myPoints, currentOpponent.points);
+    scoreResult = calculateRankedPoints(myPoints, currentOpponent ? (currentOpponent.points || 0) : 0);
     if (uid) {
       update(ref(db, 'players/' + uid), {
         points: increment(scoreResult.winnerDelta),
@@ -368,8 +368,24 @@ function handleRankedGameOver(playerWon) {
     }
 
     modalIcon.textContent = '🎉';
-    matchModal.style.display = 'flex';
+    modalTitle.textContent = '排位賽獲勝！';
+    modalDesc.textContent = `獲得 +${scoreResult.winnerDelta} 積分！`;
+  } else {
+    // 玩家落敗
+    scoreResult = calculateRankedPoints(currentOpponent ? (currentOpponent.points || 0) : 0, myPoints);
+    if (uid) {
+      update(ref(db, 'players/' + uid), {
+        points: increment(scoreResult.loserDelta),
+        losses: increment(1)
+      });
+    }
+
+    modalIcon.textContent = '💔';
+    modalTitle.textContent = '排位賽惜敗！';
+    modalDesc.textContent = `很可惜未拿下比賽，積分變動 ${scoreResult.loserDelta} 分，再接再厲！`;
   }
+
+  matchModal.style.display = 'flex';
 }
 
 // 退出賽場返回大廳
