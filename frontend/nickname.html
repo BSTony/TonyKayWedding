@@ -135,19 +135,24 @@
         <p class="greet-sub" id="page-sub">請輸入你想在遊戲中顯示的暱稱</p>
       </div>
 
-      <!-- 自訂暱稱輸入框 -->
-      <div class="input-group animate-fadeInUp anim-delay-1">
-        <input
-          type="text"
-          id="nickname-input"
-          class="nickname-input"
-          placeholder="請輸入你的暱稱 (最多10字)"
-          maxlength="10"
-          autocomplete="off"
-          autocorrect="off"
-          autocapitalize="off"
-        >
-        <span class="char-count"><span id="char-count">0</span> / 10</span>
+      <!-- 自訂暱稱輸入框 + 隨機骰子 -->
+      <div class="input-group animate-fadeInUp anim-delay-1" style="display:flex; align-items:center; gap:8px;">
+        <div style="position:relative; flex:1;">
+          <input
+            type="text"
+            id="nickname-input"
+            class="nickname-input"
+            placeholder="請輸入你的暱稱 (最多10字)"
+            maxlength="10"
+            autocomplete="off"
+            autocorrect="off"
+            autocapitalize="off"
+          >
+          <span class="char-count"><span id="char-count">0</span> / 10</span>
+        </div>
+        <button id="btn-reroll-name" title="隨機換一個酷炫暱稱" style="background:rgba(255,255,255,0.9); border:2px solid var(--border); border-radius:var(--radius); padding:14px 16px; font-size:18px; cursor:pointer; box-shadow:var(--shadow); transition:transform 0.15s; flex-shrink:0;">
+          🎲
+        </button>
       </div>
 
       <!-- 情況 A: 已登入 Google 帳號 ── 友善直接儲存 -->
@@ -163,7 +168,7 @@
       <!-- 情況 B: 訪客模式 ── 選擇綁定 Google 或訪客進入 -->
       <div id="box-guest-user" style="width:100%; display:flex; flex-direction:column; gap:10px;" class="animate-fadeInUp anim-delay-2">
         <!-- 1. 確認訪客進入 -->
-        <button class="btn btn-primary" id="btn-guest-enter" disabled style="background: linear-gradient(135deg, #3b82f6, #2563eb); font-size:16px;">
+        <button class="btn btn-primary" id="btn-guest-enter" style="background: linear-gradient(135deg, #3b82f6, #2563eb); font-size:16px;">
           ✅ 確認暱稱並進入大廳
         </button>
 
@@ -172,7 +177,7 @@
         </div>
 
         <!-- 2. Google 綁定存檔 -->
-        <button class="btn-google-card" id="btn-google-login" disabled>
+        <button class="btn-google-card" id="btn-google-login">
           <svg width="20" height="20" viewBox="0 0 24 24">
             <path fill="#4285F4" d="M22.56 12.25c0-.78-.07-1.53-.2-2.25H12v4.26h5.92c-.26 1.37-1.04 2.53-2.21 3.31v2.77h3.57c2.08-1.92 3.28-4.74 3.28-8.09z"/>
             <path fill="#34A853" d="M12 23c2.97 0 5.46-.98 7.28-2.66l-3.57-2.77c-.98.66-2.23 1.06-3.71 1.06-2.86 0-5.29-1.93-6.16-4.53H2.18v2.84C3.99 20.53 7.7 23 12 23z"/>
@@ -184,7 +189,7 @@
       </div>
 
       <p class="hint-text" style="font-size: 11px;">
-        💡 遊戲內一律只會顯示你的自訂暱稱，絕不公開 Google 本名或 Email。
+        💡 點擊 🎲 骰子可隨機換一個不重複的酷炫暱稱！
       </p>
     </div>
   </div>
@@ -193,9 +198,20 @@
     import { db, ref, get, set, update, auth, googleProvider, signInWithPopup, signOut } from './firebase.js';
 
     const EMOJIS = ['🏆', '👑', '⚡', '🌸', '🦋', '🎯', '🔥', '🌟', '💪', '🐼'];
+    const PREFIXES = ['神級', '快樂', '幸運', '閃電', '霸氣', '隱世', '疾風', '甜蜜', '狂暴', '榮耀', '浪漫', '超能', '傳奇', '瀟灑', '帥氣', '絕代', '靈巧', '爆裂', '幻影', '璀璨', '巔峰', '無敵', '熱血', '極速', '王者'];
+    const NOUNS = ['嘉賓', '選手', '球王', '刺客', '戰士', '劍客', '俠客', '大師', '狂人', '達人', '游俠', '勇者', '霸王', '飛俠', '戰將', '先鋒', '巨星', '傳說', '靈猴', '飛龍', '猛虎', '高手', '宗師', '奇才'];
+
+    function generateUniqueRandomNickname() {
+      const p = PREFIXES[Math.floor(Math.random() * PREFIXES.length)];
+      const n = NOUNS[Math.floor(Math.random() * NOUNS.length)];
+      const num = Math.floor(100 + Math.random() * 900);
+      return `${p}${n}#${num}`;
+    }
+
     const input = document.getElementById('nickname-input');
     const charCount = document.getElementById('char-count');
     const avatarPreview = document.getElementById('avatar-preview');
+    const btnReroll = document.getElementById('btn-reroll-name');
 
     const pageTitle = document.getElementById('page-title');
     const pageSub = document.getElementById('page-sub');
@@ -214,7 +230,12 @@
     const isGoogleUser = localStorage.getItem('wbc_is_google') === 'true';
     const currentUid = localStorage.getItem('wbc_uid');
     const currentPoints = localStorage.getItem('wbc_points') || 0;
-    const currentNickname = localStorage.getItem('wbc_nickname') || '';
+    let currentNickname = localStorage.getItem('wbc_nickname') || '';
+
+    // 若為訪客且尚未設定暱稱，自動給予隨機不重複暱稱
+    if (!currentNickname && !isGoogleUser) {
+      currentNickname = generateUniqueRandomNickname();
+    }
 
     // 初始化狀態視圖
     if (isGoogleUser) {
@@ -226,11 +247,6 @@
 
       pageTitle.textContent = '修改暱稱';
       pageSub.textContent = '修改你的顯示暱稱，積分將持續安全保存';
-
-      if (currentNickname) {
-        input.value = currentNickname;
-        charCount.textContent = currentNickname.length;
-      }
     } else {
       // ⚪ 訪客模式
       googleBadge.style.display = 'none';
@@ -238,15 +254,25 @@
       boxGuestUser.style.display = 'flex';
 
       pageTitle.textContent = '設定暱稱';
-      pageSub.textContent = '請輸入你想在遊戲中顯示的自訂暱稱';
-
-      if (currentNickname) {
-        input.value = currentNickname;
-        charCount.textContent = currentNickname.length;
-        btnGuestEnter.disabled = false;
-        btnGoogleLogin.disabled = false;
-      }
+      pageSub.textContent = '可自由自訂暱稱，或使用下方隨機分配的酷炫稱號';
     }
+
+    if (currentNickname) {
+      input.value = currentNickname;
+      charCount.textContent = currentNickname.length;
+      btnGuestEnter.disabled = false;
+      btnGoogleLogin.disabled = false;
+      btnSaveGoogle.disabled = false;
+    }
+
+    // 🎲 隨機換名按鈕
+    btnReroll.addEventListener('click', () => {
+      btnReroll.style.transform = 'rotate(360deg)';
+      setTimeout(() => { btnReroll.style.transform = 'none'; }, 200);
+      const newName = generateUniqueRandomNickname();
+      input.value = newName;
+      input.dispatchEvent(new Event('input'));
+    });
 
     // 輸入即時更新字數與頭像
     input.addEventListener('input', () => {
@@ -300,8 +326,7 @@
 
     // ── 2. 訪客確認進入 ──
     btnGuestEnter.addEventListener('click', () => {
-      const nickname = input.value.trim();
-      if (!nickname) return;
+      const nickname = input.value.trim() || generateUniqueRandomNickname();
 
       // 若原先沒有訪客 UID，產生全新訪客 UID，積分歸 0
       if (!localStorage.getItem('wbc_uid') || isGoogleUser) {
@@ -318,8 +343,7 @@
 
     // ── 3. 訪客選擇綁定 Google 帳號 ──
     btnGoogleLogin.addEventListener('click', async () => {
-      const customNickname = input.value.trim();
-      if (!customNickname) return;
+      const customNickname = input.value.trim() || generateUniqueRandomNickname();
 
       try {
         btnGoogleLogin.disabled = true;

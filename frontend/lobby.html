@@ -183,13 +183,28 @@
   <script type="module">
     import { db, ref, onValue, set, get, update, auth, googleProvider, signInWithPopup, signOut, onAuthStateChanged } from './firebase.js';
 
-    const EMOJIS = ['🏆', '👑', '⚡', '🌸', '蝴蝶', '🎯', '🔥', '🌟', '💪', '🐼'];
+    const EMOJIS = ['🏆', '👑', '⚡', '🌸', '🦋', '🎯', '🔥', '🌟', '💪', '🐼'];
+    const PREFIXES = ['神級', '快樂', '幸運', '閃電', '霸氣', '隱世', '疾風', '甜蜜', '狂暴', '榮耀', '浪漫', '超能', '傳奇', '瀟灑', '帥氣', '絕代', '靈巧', '爆裂', '幻影', '璀璨', '巔峰', '無敵', '熱血', '極速', '王者'];
+    const NOUNS = ['嘉賓', '選手', '球王', '刺客', '戰士', '劍客', '俠客', '大師', '狂人', '達人', '游俠', '勇者', '霸王', '飛俠', '戰將', '先鋒', '巨星', '傳說', '靈猴', '飛龍', '猛虎', '高手', '宗師', '奇才'];
+
+    function generateUniqueRandomNickname() {
+      const p = PREFIXES[Math.floor(Math.random() * PREFIXES.length)];
+      const n = NOUNS[Math.floor(Math.random() * NOUNS.length)];
+      const num = Math.floor(100 + Math.random() * 900);
+      return `${p}${n}#${num}`;
+    }
     
     // 檢查是否為 Google 登入者
     let isGoogleUser = localStorage.getItem('wbc_is_google') === 'true';
     let uid = localStorage.getItem('wbc_uid');
-    let nickname = localStorage.getItem('wbc_nickname') || '婚禮嘉賓';
+    let nickname = localStorage.getItem('wbc_nickname');
     let photoURL = localStorage.getItem('wbc_photo') || '';
+
+    // 若為訪客且沒有暱稱，自動產生隨機不重複暱稱
+    if (!nickname) {
+      nickname = generateUniqueRandomNickname();
+      localStorage.setItem('wbc_nickname', nickname);
+    }
 
     // 若為訪客且沒有 uid，產生全新訪客 UID，初始積分 0
     if (!uid) {
