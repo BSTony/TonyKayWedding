@@ -112,12 +112,52 @@
       image-rendering: pixelated; /* 像素風 */
     }
     
-    /* 橫向分數板 (黑底黃字復古風) */
-    .score-board.vs-computer-board {
-      position: absolute; top: 15px; left: 50%; transform: translateX(-50%);
-      display: flex; gap: 30px; background: transparent;
-      padding: 5px 20px; z-index: 10; margin: 0;
-      font-family: 'Press Start 2P', cursive; color: #facc15;
+    /* 分離式左右分數面板 (高對比玻璃霓虹風，完全避開中央婚禮字樣) */
+    .score-badge {
+      position: absolute; top: 14px; z-index: 30;
+      display: flex; flex-direction: column; align-items: center; justify-content: center;
+      background: rgba(15, 23, 42, 0.78);
+      backdrop-filter: blur(10px);
+      -webkit-backdrop-filter: blur(10px);
+      border-radius: 14px;
+      padding: 6px 16px;
+      min-width: 76px;
+      user-select: none;
+      pointer-events: none;
+    }
+    .score-badge.player-badge {
+      left: 18px;
+      border: 2px solid rgba(56, 189, 248, 0.85);
+      box-shadow: 0 0 16px rgba(56, 189, 248, 0.4), 0 8px 24px rgba(0, 0, 0, 0.5);
+    }
+    .score-badge.comp-badge {
+      right: 18px;
+      border: 2px solid rgba(244, 63, 94, 0.85);
+      box-shadow: 0 0 16px rgba(244, 63, 94, 0.4), 0 8px 24px rgba(0, 0, 0, 0.5);
+    }
+    .badge-label {
+      font-size: 11px;
+      font-weight: 900;
+      letter-spacing: 1px;
+      margin-bottom: 2px;
+      font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, sans-serif;
+    }
+    .player-badge .badge-label { color: #38bdf8; }
+    .comp-badge .badge-label { color: #fb7185; }
+
+    .badge-score {
+      font-family: 'Press Start 2P', monospace;
+      font-size: 26px;
+      font-weight: bold;
+      line-height: 1.1;
+    }
+    .player-badge .badge-score {
+      color: #38bdf8;
+      text-shadow: 0 0 12px rgba(56, 189, 248, 0.9);
+    }
+    .comp-badge .badge-score {
+      color: #fb7185;
+      text-shadow: 0 0 12px rgba(244, 63, 94, 0.9);
     }
     
     /* 虛擬手把 (透明鍵盤風格) */
@@ -193,7 +233,7 @@
 
   <!-- 遊戲畫面 -->
   <div id="screen-game" class="hidden">
-    <div style="position: absolute; top: 10px; left: 10px; color: white; font-size: 14px; font-weight: bold; z-index: 99999; font-family: monospace;">Ver: 2.0 (透明按鍵)</div>
+
     <div class="game-header">
       <div id="my-team-text">準備中...</div>
       <div id="game-status">等待大螢幕開始...</div>
@@ -219,17 +259,14 @@
         <canvas id="game-canvas"></canvas>
       </div>
       
-      <!-- 橫向分數板 -->
-      <div class="score-board vs-computer-board">
-        <div class="score-col">
-          <div class="score-val me" id="my-score-vs" style="font-size:32px; color: #facc15;">0</div>
-        </div>
-        <div class="score-col" style="display:flex;align-items:center;font-size:12px; color: #fff;">
-          -
-        </div>
-        <div class="score-col">
-          <div class="score-val comp" id="comp-score-vs" style="font-size:32px; color: #facc15;">0</div>
-        </div>
+      <!-- 分離式左/右計分板 (避開中央婚禮文字，字體清晰發光) -->
+      <div class="score-badge player-badge">
+        <div class="badge-label">👦 YOU</div>
+        <div class="badge-score" id="my-score-vs">0</div>
+      </div>
+      <div class="score-badge comp-badge">
+        <div class="badge-label">🤖 COM</div>
+        <div class="badge-score" id="comp-score-vs">0</div>
       </div>
       
       <!-- 虛擬手把 -->
