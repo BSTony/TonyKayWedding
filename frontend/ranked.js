@@ -59,6 +59,7 @@ const RANKED_CONTENDERS = [
   { name: '👑【最強王者】新娘 KAY', avatar: '👑', ptsOffset: +10, boldness: 6 }
 ];
 
+let queueKey = null;
 let queueRef = null;
 let matchFound = false;
 let elapsedTimer = null;
@@ -90,10 +91,13 @@ function startMatchmaking() {
   oppPtsEl.textContent = '- pts';
 
   try {
-    queueRef = ref(db, 'rankedQueue/' + uid);
+    // 為每個配對連線產生獨立 Session Key (防止同瀏覽器雙開或多開互相衝突)
+    queueKey = uid + '_' + Date.now().toString(36) + '_' + Math.random().toString(36).slice(2, 6);
+    queueRef = ref(db, 'rankedQueue/' + queueKey);
 
     // 1. 登記進入排位配對隊列
     set(queueRef, {
+      queueKey,
       uid,
       nickname,
       points: myPoints,
@@ -118,16 +122,16 @@ function startMatchmaking() {
     onValue(ref(db, 'rankedQueue'), (snap) => {
       if (matchFound) return;
       const allQueue = snap.val() || {};
-      for (const otherUid in allQueue) {
-        if (otherUid !== uid) {
-          const other = allQueue[otherUid];
-          // 檢查對方是否正在搜尋且尚未配對
+      for (const otherKey in allQueue) {
+        if (otherKey !== queueKey) {
+          const other = allQueue[otherKey];
+          // 檢查對方是否正在搜尋且尚未配對，且時間在 2 分鐘內
           if (other && (other.status === 'searching' && !other.matchedWith) && (Date.now() - (other.createdAt || 0) < 120000)) {
             matchFound = true;
             if (elapsedTimer) clearInterval(elapsedTimer);
 
             // 雙向即時握手配對
-            update(ref(db, 'rankedQueue/' + otherUid), {
+            update(ref(db, 'rankedQueue/' + otherKey), {
               status: 'matched',
               matchedWith: { uid, nickname, points: myPoints, avatar: myAvatarEl.textContent }
             }).catch(() => {});
