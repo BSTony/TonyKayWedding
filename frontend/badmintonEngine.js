@@ -1,24 +1,29 @@
 import { PikaPhysics, PikaUserInput } from './physics.js';
 
 /**
- * Pikachu Volleyball Engine - 完美復刻版
+ * Pikachu Volleyball Engine - 高畫質婚禮復刻版 (KAY & TONY WEDDING)
  *
- * 原版座標系：
+ * 核心邏輯座標系 (432x304)：
  *   玩家 x,y = 中心點 (64x64 sprite -> 繪製左上角 = x-32, y-32)
  *   球   x,y = 中心點 (40x40 sprite -> 繪製左上角 = x-20, y-20)
  *   地板 y = 248
  *   球落地 y = 252 (BALL_TOUCHING_GROUND_Y_COORD)
  *   玩家站地 y = 244 (PLAYER_TOUCHING_GROUND_Y_COORD)
  *   網柱頂 y = 176 (NET_PILLAR_TOP_TOP_Y_COORD)
+ *
+ * 渲染解析度：2x Retina HD (864x608)，極致細膩清晰
  */
 export class BadmintonEngine {
   constructor(canvasId) {
     this.canvas = document.getElementById(canvasId);
     this.ctx = this.canvas.getContext('2d');
 
-    // 固定原版解析度 432x304
-    this.canvas.width = 432;
-    this.canvas.height = 304;
+    // 邏輯解析度 (原版物理) 與 2x 高畫質渲染解析度
+    this.scale = 2;
+    this.logicalWidth = 432;
+    this.logicalHeight = 304;
+    this.canvas.width = this.logicalWidth * this.scale;
+    this.canvas.height = this.logicalHeight * this.scale;
 
     this.isRunning = false;
     this.roundState = 'idle'; // 'idle' | 'playing' | 'scoring' | 'game_over'
@@ -29,12 +34,13 @@ export class BadmintonEngine {
     // 物理引擎 (player1=左=玩家, player2=右=AI)
     this.pikaPhysics = new PikaPhysics(false, true);
 
-    // 輸入狀態與緩衝 (讓按鍵手感極度靈敏，不掉指令)
+    // 輸入狀態與緩衝
     this.keys = { up: false, down: false, left: false, right: false };
-    this.powerHitBuffer = 0; // 緩衝幀數
+    this.powerHitBuffer = 0;
 
-    // 打擊特效列表 (獨立管理，保證平滑淡出與縮小消失)
+    // 特效列表 (爆炸打擊、金色婚禮星芒)
     this.punchEffects = [];
+    this.sparkles = [];
 
     this.loop = this.loop.bind(this);
 
@@ -50,7 +56,7 @@ export class BadmintonEngine {
         this.spriteLoaded = true;
       });
 
-    // 載入婚禮背景圖
+    // 載入婚禮背景圖 (KAY & TONY WEDDING)
     this.bgImg = new Image();
     this.bgImg.src = './wedding_bg.jpg';
     this.bgLoaded = false;
@@ -58,16 +64,18 @@ export class BadmintonEngine {
       this.bgLoaded = true;
     };
 
-    // 浪漫婚禮漂浮花瓣粒子系統 (粉紅/白玫瑰花瓣)
-    this.petals = Array.from({ length: 20 }, () => ({
+    // 浪漫玫瑰花瓣系統 (粉紅/象牙白玫瑰)
+    this.petals = Array.from({ length: 24 }, () => ({
       x: Math.random() * 432,
-      y: Math.random() * 248,
+      y: Math.random() * 250,
       size: 2.5 + Math.random() * 3.5,
-      speedX: 0.3 + Math.random() * 0.5,
-      speedY: 0.35 + Math.random() * 0.55,
+      speedX: 0.25 + Math.random() * 0.45,
+      speedY: 0.3 + Math.random() * 0.5,
+      wobble: Math.random() * Math.PI * 2,
+      wobbleSpeed: 0.03 + Math.random() * 0.04,
       rot: Math.random() * Math.PI * 2,
       rotSpeed: (Math.random() - 0.5) * 0.04,
-      color: Math.random() > 0.4 ? 'rgba(255, 182, 193, 0.75)' : 'rgba(255, 240, 245, 0.85)'
+      color: Math.random() > 0.4 ? 'rgba(255, 182, 193, 0.85)' : 'rgba(255, 240, 245, 0.92)'
     }));
 
     // 原版約 30 FPS
@@ -85,6 +93,7 @@ export class BadmintonEngine {
     this.playerScore = 0;
     this.compScore = 0;
     this.punchEffects = [];
+    this.sparkles = [];
     this.pikaPhysics = new PikaPhysics(false, true);
     this.lastFrameTime = performance.now();
     requestAnimationFrame(this.loop);
@@ -97,29 +106,43 @@ export class BadmintonEngine {
 
   /**
    * 觸發攻擊/殺球/撲球指令 (A鍵)
-   * 支援 5 幀 (~160ms) 輸入緩衝，大幅提升手感
    */
   playerHit() {
     this.powerHitBuffer = 5;
   }
 
   /**
-   * 新增一個打擊爆炸特效 (會自動由大變小並漸漸透明消失)
+   * 新增打擊特效與金色婚禮星芒
    */
-  addPunchEffect(x, y) {
+  addPunchEffect(x, y, isPower = false) {
     this.punchEffects.push({
       x,
       y,
       radius: 20,
       maxRadius: 20,
-      decay: 1.5 // 每幀衰減速度，約 13 幀 (~0.4s) 完全消失
+      decay: 1.4
     });
+
+    // 產生金色星芒粒子
+    const count = isPower ? 12 : 6;
+    for (let i = 0; i < count; i++) {
+      const angle = (Math.PI * 2 * i) / count + (Math.random() - 0.5) * 0.5;
+      const speed = 2 + Math.random() * 3.5;
+      this.sparkles.push({
+        x,
+        y,
+        vx: Math.cos(angle) * speed,
+        vy: Math.sin(angle) * speed,
+        size: 2.5 + Math.random() * 2.5,
+        alpha: 1.0,
+        decay: 0.06 + Math.random() * 0.04
+      });
+    }
   }
 
   update() {
     if (!this.isRunning) return;
 
-    // 如果在過場中，不更新球與玩家物理，但畫面動畫繼續跑
     if (this.roundState !== 'playing') {
       return;
     }
@@ -137,33 +160,32 @@ export class BadmintonEngine {
       p1Input.powerHit = 1;
       this.powerHitBuffer--;
 
-      // 如果在地面且沒按方向鍵按A，自動向面對方向撲球，提升反應
+      // 若在地面且沒按方向鍵按A，自動向右撲球
       if (p1.state === 0 && p1Input.xDirection === 0) {
-        p1Input.xDirection = 1; // 左邊玩家預設向右撲
+        p1Input.xDirection = 1;
       }
     } else {
       p1Input.powerHit = 0;
     }
 
-    const p2Input = new PikaUserInput(); // AI 自動控制
+    const p2Input = new PikaUserInput(); // AI 控制
 
-    // 紀錄執行前的 punchEffectRadius
     const prevPunchRadius = this.pikaPhysics.ball.punchEffectRadius;
 
-    // 執行一幀物理計算
+    // 執行物理幀
     const isBallTouchingGround = this.pikaPhysics.runEngineForNextFrame([p1Input, p2Input]);
     const b = this.pikaPhysics.ball;
 
-    // 若物理引擎觸發了新的打擊特效 (例如殺球或落地)
+    // 打擊特效觸發
     if (b.punchEffectRadius > 0 && prevPunchRadius === 0) {
-      this.addPunchEffect(b.punchEffectX, b.punchEffectY);
-      b.punchEffectRadius = 0; // 由我們的特效系統接手管理
+      this.addPunchEffect(b.punchEffectX, b.punchEffectY, b.isPowerHit);
+      b.punchEffectRadius = 0;
     }
 
-    // 當球落地 (得分判定)
+    // 球落地得分
     if (isBallTouchingGround) {
-      b.isPowerHit = false; // 落地立即取消殘影
-      this.addPunchEffect(b.x, 252); // 在落地點生成小爆炸
+      b.isPowerHit = false;
+      this.addPunchEffect(b.x, 252, false);
 
       const ballX = b.x;
       if (ballX < 216) {
@@ -180,26 +202,23 @@ export class BadmintonEngine {
         this.roundState = 'game_over';
         if (this.onGameOver) this.onGameOver(this.playerScore > this.compScore);
       } else {
-        // 進入得分短暫過場 (畫面不卡頓，雲朵與特效正常淡出)
         this.roundState = 'scoring';
         setTimeout(() => {
           if (!this.isRunning) return;
-          const p2Serve = ballX < 216; // 失分方發球
+          const p2Serve = ballX < 216;
           this.pikaPhysics.player1.initializeForNewRound();
           this.pikaPhysics.player2.initializeForNewRound();
           this.pikaPhysics.ball.initializeForNewRound(p2Serve);
           this.punchEffects = [];
+          this.sparkles = [];
           this.roundState = 'playing';
         }, 1200);
       }
     }
   }
 
-  // ─── 繪圖系統 ──────────────────────────────────────────────
+  // ─── 精緻繪圖系統 ──────────────────────────────────────────
 
-  /**
-   * 支援座標、翻轉、自訂寬高與透明度 (alpha)
-   */
   drawSprite(name, x, y, options = {}) {
     if (!this.spriteLoaded) return;
     const frameData = this.spriteData[name];
@@ -228,7 +247,6 @@ export class BadmintonEngine {
     this.ctx.restore();
   }
 
-  /** 重複貼 tile 填滿指定區域 */
   drawTiledSprite(name, rectX, rectY, rectW, rectH) {
     if (!this.spriteLoaded) return;
     const frameData = this.spriteData[name];
@@ -241,32 +259,59 @@ export class BadmintonEngine {
     }
   }
 
+  /**
+   * 繪製精緻的動態柔和圓形陰影
+   */
+  drawSmoothShadow(x, y, radiusX, radiusY, alpha = 0.35) {
+    if (alpha <= 0) return;
+    const ctx = this.ctx;
+    ctx.save();
+    ctx.beginPath();
+    ctx.translate(x, y);
+    ctx.scale(1, radiusY / radiusX);
+    const grad = ctx.createRadialGradient(0, 0, 0, 0, 0, radiusX);
+    grad.addColorStop(0, `rgba(0, 0, 0, ${alpha})`);
+    grad.addColorStop(0.7, `rgba(0, 0, 0, ${alpha * 0.5})`);
+    grad.addColorStop(1, 'rgba(0, 0, 0, 0)');
+    ctx.fillStyle = grad;
+    ctx.arc(0, 0, radiusX, 0, Math.PI * 2);
+    ctx.fill();
+    ctx.restore();
+  }
+
   draw() {
     if (!this.spriteLoaded) return;
 
     const ctx = this.ctx;
 
-    // ── 1. 浪漫婚禮花園背景 ──
+    ctx.save();
+    // 放大至 2x 高解析度
+    ctx.scale(this.scale, this.scale);
+
+    // ── 1. 浪漫戶外婚禮花園背景 (KAY & TONY WEDDING) ──
     if (this.bgLoaded) {
-      // 繪製婚禮背景圖
+      // 繪製高畫質背景 (0~248px)
       ctx.drawImage(this.bgImg, 0, 0, 432, 248);
     } else {
       ctx.fillStyle = '#70b8e8';
       ctx.fillRect(0, 0, 432, 248);
     }
 
-    // ── 2. 浪漫玫瑰花瓣隨風飄落 ──
+    // ── 2. 浪漫玫瑰花瓣漂浮系統 ──
     for (const p of this.petals) {
-      p.x += p.speedX;
+      p.wobble += p.wobbleSpeed;
+      p.x += p.speedX + Math.sin(p.wobble) * 0.3;
       p.y += p.speedY;
       p.rot += p.rotSpeed;
+
       if (p.y > 248) {
-        p.y = -8;
+        p.y = -10;
         p.x = Math.random() * 432;
       }
       if (p.x > 432) {
-        p.x = -8;
+        p.x = -10;
       }
+
       ctx.save();
       ctx.translate(p.x, p.y);
       ctx.rotate(p.rot);
@@ -277,22 +322,35 @@ export class BadmintonEngine {
       ctx.restore();
     }
 
-    // ── 3. 地板 (沙灘球場 / 婚禮草地球場) ──
+    // ── 3. 地板 (婚禮沙灘球場，帶有精緻邊緣) ──
     this.drawTiledSprite('objects/ground_red.png',    0, 248, 432, 16);
     this.drawTiledSprite('objects/ground_yellow.png', 0, 264, 432, 40);
 
     // ── 4. 網柱 ──
-    const netX = 216 - 4; // 網柱寬 8px，中心對齊 216
+    const netX = 216 - 4;
     this.drawTiledSprite('objects/net_pillar_top.png', netX, 176, 8, 8);
     this.drawTiledSprite('objects/net_pillar.png',     netX, 184, 8, 64);
 
-    // ── 6. 玩家陰影 ──
+    // ── 5. 動態柔和陰影 ──
     const p1 = this.pikaPhysics.player1;
     const p2 = this.pikaPhysics.player2;
-    this.drawSprite('objects/shadow.png', p1.x - 16, 248);
-    this.drawSprite('objects/shadow.png', p2.x - 16, 248);
+    const b = this.pikaPhysics.ball;
 
-    // ── 7. Pikachu 角色 (座標中心點位移 -32, -32) ──
+    // 玩家陰影 (隨跳躍高度動態縮放)
+    const p1HeightAboveGround = Math.max(0, 244 - p1.y);
+    const p1ShadowScale = Math.max(0.4, 1 - p1HeightAboveGround / 180);
+    this.drawSmoothShadow(p1.x, 249, 22 * p1ShadowScale, 7 * p1ShadowScale, 0.4 * p1ShadowScale);
+
+    const p2HeightAboveGround = Math.max(0, 244 - p2.y);
+    const p2ShadowScale = Math.max(0.4, 1 - p2HeightAboveGround / 180);
+    this.drawSmoothShadow(p2.x, 249, 22 * p2ShadowScale, 7 * p2ShadowScale, 0.4 * p2ShadowScale);
+
+    // 球的地面投影陰影
+    const ballHeightAboveGround = Math.max(0, 252 - b.y);
+    const ballShadowScale = Math.max(0.3, 1 - ballHeightAboveGround / 220);
+    this.drawSmoothShadow(b.x, 251, 14 * ballShadowScale, 5 * ballShadowScale, 0.35 * ballShadowScale);
+
+    // ── 6. Pikachu 角色 (清晰復刻像素繪製) ──
     const p1State = Math.min(p1.state, 6);
     const p1Frame = p1.frameNumber;
     const p2State = Math.min(p2.state, 6);
@@ -301,11 +359,8 @@ export class BadmintonEngine {
     this.drawSprite(`pikachu/pikachu_${p1State}_${p1Frame}.png`, p1.x - 32, p1.y - 32, { flipX: false });
     this.drawSprite(`pikachu/pikachu_${p2State}_${p2Frame}.png`, p2.x - 32, p2.y - 32, { flipX: true });
 
-    // ── 8. 球與殺球殘影 ──
-    const b = this.pikaPhysics.ball;
-
+    // ── 7. 排球與殺球光軌 ──
     if (b.isPowerHit && this.roundState === 'playing') {
-      // 殺球三段殘影
       this.drawSprite('ball/ball_trail.png', b.previousPreviousX - 20, b.previousPreviousY - 20, { alpha: 0.35 });
       this.drawSprite('ball/ball_trail.png', b.previousX - 20,         b.previousY - 20,         { alpha: 0.65 });
       this.drawSprite('ball/ball_hyper.png', b.x - 20,                 b.y - 20,                 { alpha: 1.0 });
@@ -315,7 +370,7 @@ export class BadmintonEngine {
       this.drawSprite(`ball/ball_${rot}.png`, b.x - 20, b.y - 20);
     }
 
-    // ── 9. 打擊爆炸特效 (漸漸縮小並透明消失) ──
+    // ── 8. 打擊爆炸特效 ──
     for (let i = this.punchEffects.length - 1; i >= 0; i--) {
       const fx = this.punchEffects[i];
       fx.radius -= fx.decay;
@@ -326,13 +381,38 @@ export class BadmintonEngine {
         continue;
       }
 
-      const size = (fx.radius / fx.maxRadius) * 40;
+      const size = (fx.radius / fx.maxRadius) * 42;
       this.drawSprite('ball/ball_punch.png', fx.x - size / 2, fx.y - size / 2, {
         w: size,
         h: size,
         alpha: alpha
       });
     }
+
+    // ── 9. 金色婚禮星芒光點 ──
+    for (let i = this.sparkles.length - 1; i >= 0; i--) {
+      const sp = this.sparkles[i];
+      sp.x += sp.vx;
+      sp.y += sp.vy;
+      sp.vx *= 0.94;
+      sp.vy *= 0.94;
+      sp.alpha -= sp.decay;
+
+      if (sp.alpha <= 0) {
+        this.sparkles.splice(i, 1);
+        continue;
+      }
+
+      ctx.save();
+      ctx.globalAlpha = sp.alpha;
+      ctx.fillStyle = '#fde047'; // 金黃色星芒
+      ctx.beginPath();
+      ctx.arc(sp.x, sp.y, sp.size, 0, Math.PI * 2);
+      ctx.fill();
+      ctx.restore();
+    }
+
+    ctx.restore();
   }
 
   loop(timestamp) {
