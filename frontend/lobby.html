@@ -161,8 +161,10 @@
     <!-- Recent ranking preview -->
     <p class="section-title animate-fadeInUp anim-delay-3">LIVE RANKING 即時排行</p>
     <div class="card animate-fadeInUp anim-delay-3" id="ranking-preview">
-      <div class="flex-center" style="padding: 20px 0;">
-        <div class="spinner"></div>
+      <div class="rank-row my-row">
+        <span class="rank-num gold">🥇</span>
+        <span class="rank-name" id="preview-my-name">玩家</span>
+        <span class="rank-points" id="preview-my-points">0 pts</span>
       </div>
     </div>
   </div>
@@ -171,12 +173,15 @@
     import { db, ref, onValue, set, update } from './firebase.js';
 
     const EMOJIS = ['🏸', '👑', '⚡', '🌸', '🦋', '🎯', '🔥', '🌟', '💪', '🐼'];
-    const uid = localStorage.getItem('wbc_uid');
-    const nickname = localStorage.getItem('wbc_nickname');
+    const uid = localStorage.getItem('wbc_uid') || ('user_' + Math.floor(Math.random()*1000000));
+    const nickname = localStorage.getItem('wbc_nickname') || '婚禮嘉賓';
 
-    if (!uid || !nickname) {
-      window.location.href = './nickname.html';
-    }
+    localStorage.setItem('wbc_uid', uid);
+    localStorage.setItem('wbc_nickname', nickname);
+
+    // 立即初始化預設畫面 (絕不等待網路)
+    document.getElementById('preview-my-name').textContent = nickname;
+    document.getElementById('online-count').textContent = '1';
 
     // Set avatar
     const code = nickname?.charCodeAt(0) || 0;
