@@ -325,9 +325,10 @@ function enterArenaMatch() {
     handleRankedGameOver(playerWon);
   };
 
-  // 判定真人連線對打 vs 單人 AI
+    // 判定真人連線對打 vs 單人 AI
   if (currentOpponent.isRealPlayer && currentRoomId) {
     const role = isHostPlayer ? 'p1' : 'p2';
+    const inputKey = isHostPlayer ? 'p1Input' : 'p2Input';
 
     // 監聽是否有一方中途離開 / 斷線 (不計勝敗與積分)
     onDisconnect(ref(db, 'rankedRooms/' + currentRoomId + '/abandoned')).set({ by: uid, name: nickname }).catch(() => {});
@@ -346,38 +347,20 @@ function enterArenaMatch() {
       }
     });
 
-    // 優先讀取自訂雲端伺服器 (若為本地則連線本地，線上若有設定環境則直連雲端伺服器)
-    const cloudWsUrl = localStorage.getItem('wbc_cloud_server_url') || (window.location.hostname === 'localhost' ? 'ws://localhost:8080' : null);
+    // 🌟 Firebase 純客戶端模式：雙方均不做物理計算
+    //    P1/P2 各自把鍵盤輸入寫到 Firebase
+    //    雲端伺服器 (24/7 always-on) 負責計算物理、廣播 state
+    //    雙方讀取 state 渲染，完全同步，不受分頁切換/螢幕刷新率影響
+    gameEngine.startFirebaseClient(role, (input) => {
+      set(ref(db, 'rankedRooms/' + currentRoomId + '/' + inputKey), input).catch(() => {});
+    }, 5);
 
-    if (cloudWsUrl) {
-      // 🌟 1. 雲端專屬伺服器物理計算 (Server-Authoritative WebSocket)
-      gameEngine.startCloudServer(cloudWsUrl, currentRoomId, role, 5);
-    } else {
-      // 🌟 2. 雲端 Firebase 權威模式 (雙端 60 FPS 本地物理預測 ＋ 權威裁判)
-      if (isHostPlayer) {
-        gameEngine.startMultiplayer('host', 5, null, (state) => {
-          set(ref(db, 'rankedRooms/' + currentRoomId + '/state'), state).catch(() => {});
-        });
-
-        onValue(ref(db, 'rankedRooms/' + currentRoomId + '/guestInput'), (snap) => {
-          const input = snap.val();
-          if (input && gameEngine) {
-            gameEngine.setRemoteGuestInput(input);
-          }
-        });
-      } else {
-        gameEngine.startMultiplayer('guest', 5, (input) => {
-          set(ref(db, 'rankedRooms/' + currentRoomId + '/guestInput'), input).catch(() => {});
-        }, null);
-
-        onValue(ref(db, 'rankedRooms/' + currentRoomId + '/state'), (snap) => {
-          const state = snap.val();
-          if (state && gameEngine) {
-            gameEngine.receiveRemoteState(state);
-          }
-        });
+    onValue(ref(db, 'rankedRooms/' + currentRoomId + '/state'), (snap) => {
+      const state = snap.val();
+      if (state && gameEngine) {
+        gameEngine.receiveRemoteState(state);
       }
-    }
+    });
   } else {
     // 單人練習 / AI 對戰模式
     gameEngine.start(5, currentOpponent.boldness || 3);

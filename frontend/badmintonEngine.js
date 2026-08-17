@@ -115,7 +115,7 @@ export class BadmintonEngine {
 
   startMultiplayer(role = 'host', maxScore = 5, onSendInput = null, onSendState = null) {
     this.isMultiplayer = true;
-    this.multiplayerRole = role; // 'host' (權威主機，負責物理計算與畫面廣播) 或 'guest' (訪客，發送按鍵並繪製畫面)
+    this.multiplayerRole = role;
     this.maxScore = maxScore;
     this.onSendInput = onSendInput;
     this.onSendState = onSendState;
@@ -136,7 +136,35 @@ export class BadmintonEngine {
   }
 
   /**
-   * 🌟 雲端專屬伺服器模式 (Server-Authoritative WebSocket)
+   * 🌟 Firebase 純客戶端模式 (Server-Authoritative via Firebase RTDB)
+   * 雙方均不做物理計算，只送輸入、接收伺服器廣播的 state 並渲染
+   * @param {string} role - 'p1' 或 'p2'
+   * @param {Function} onSendInput - (inputObj) => void，送輸入至 Firebase 的函式
+   * @param {number} maxScore
+   */
+  startFirebaseClient(role = 'p1', onSendInput = null, maxScore = 5) {
+    this.isMultiplayer = true;
+    this.multiplayerRole = 'firebase';
+    this.cloudRole = role;
+    this.maxScore = maxScore;
+    this.onSendInput = onSendInput;
+    this.isRunning = true;
+    this.roundState = 'waiting'; // 等待伺服器第一個 state
+    this.playerScore = 0;
+    this.compScore = 0;
+    this.punchEffects = [];
+    this.sparkles = [];
+    this.remoteHostState = null;
+    this.lastInputSendTime = 0;
+    this.lastSentInputKey = '';
+    this.powerHitBuffer = 0;
+    this.pikaPhysics = new PikaPhysics(false, false);
+    this.lastFrameTime = performance.now();
+    requestAnimationFrame(this.loop);
+  }
+
+  /**
+   * 🌟 雲端專屬伺服器模式 (Server-Authoritative WebSocket - 保留備用)
    */
   startCloudServer(wsUrl, roomId, role = 'p1', maxScore = 5) {
     this.isMultiplayer = true;
@@ -218,9 +246,10 @@ export class BadmintonEngine {
     this.remoteGuestInput = { ...input };
   }
 
-  // Guest 接收 Host 廣播的即時權威畫面與比分 (100% 絕對同步)
+  // 接收伺服器廣播的權威畫面（適用 guest 模式 及 firebase 客戶端模式）
   receiveRemoteState(state) {
-    if (!state || this.multiplayerRole !== 'guest') return;
+    if (!state) return;
+    if (this.multiplayerRole !== 'guest' && this.multiplayerRole !== 'firebase') return;
     this.remoteHostState = state;
 
     const p1 = this.pikaPhysics.player1;
@@ -260,14 +289,20 @@ export class BadmintonEngine {
       }
     }
 
+    // 同步圓局狀態
+    if (state.round && state.round !== this.roundState) {
+      this.roundState = state.round;
+    }
+
     // 只要達成結算條件或收到結束信號，立即觸發結束事件
     if ((state.round === 'game_over' || this.playerScore >= this.maxScore || this.compScore >= this.maxScore) && this.roundState !== 'game_over') {
       this.roundState = 'game_over';
       if (this.onGameOver) {
-        this.onGameOver(this.compScore > this.playerScore);
+        // p1 視角：s1 是自己；p2 視角：s2 是自己
+        const myScore = this.cloudRole === 'p2' ? state.s2 : state.s1;
+        const oppScore = this.cloudRole === 'p2' ? state.s1 : state.s2;
+        if (this.onGameOver) this.onGameOver(myScore > oppScore);
       }
-    } else if (state.round) {
-      this.roundState = state.round;
     }
 
     if (state.punch) {
@@ -325,7 +360,28 @@ export class BadmintonEngine {
 
     const now = performance.now();
 
-    // ── 雲端專屬伺服器模式 (Cloud Server Authoritative) ──
+    // ── Firebase 純客戶端模式：只送輸入，完全不做物理計算，渲染由 receiveRemoteState 驅動 ──
+    if (this.multiplayerRole === 'firebase') {
+      if (this.onSendInput) {
+        const hit = this.powerHitBuffer > 0 ? 1 : 0;
+        const currentInputKey = `${this.keys.left},${this.keys.right},${this.keys.up},${this.keys.down},${hit}`;
+        if (now - this.lastInputSendTime > 30 || currentInputKey !== this.lastSentInputKey || hit) {
+          this.lastInputSendTime = now;
+          this.lastSentInputKey = currentInputKey;
+          if (hit && this.powerHitBuffer > 0) this.powerHitBuffer--;
+          this.onSendInput({
+            left: !!this.keys.left,
+            right: !!this.keys.right,
+            up: !!this.keys.up,
+            down: !!this.keys.down,
+            powerHit: hit
+          });
+        }
+      }
+      return; // 不做任何物理計算
+    }
+
+    // ── 雲端 WebSocket 模式 (備用) ──
     if (this.multiplayerRole === 'cloud') {
       if (this.ws && this.ws.readyState === WebSocket.OPEN) {
         const hit = this.powerHitBuffer > 0 ? 1 : 0;
@@ -349,7 +405,7 @@ export class BadmintonEngine {
       return;
     }
 
-    // ── Guest 訪客模式：發送本地即時搖桿指令給 Host 主機 ──
+    // ── Guest 模式：發送本地即時搖桿指令給 Host 主機 (舊架構備用) ──
     if (this.multiplayerRole === 'guest') {
       if (this.onSendInput) {
         const hit = this.powerHitBuffer > 0 ? 1 : 0;
