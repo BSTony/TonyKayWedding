@@ -87,7 +87,9 @@ export class BadmintonEngine {
     this.onGameOver = null;
   }
 
-  start() {
+  start(maxScore = 5, compBoldness = 2) {
+    this.maxScore = maxScore;
+    this.compBoldness = compBoldness;
     this.isRunning = true;
     this.roundState = 'playing';
     this.playerScore = 0;
@@ -95,6 +97,7 @@ export class BadmintonEngine {
     this.punchEffects = [];
     this.sparkles = [];
     this.pikaPhysics = new PikaPhysics(false, true);
+    this.pikaPhysics.player2.computerBoldness = compBoldness;
     this.lastFrameTime = performance.now();
     requestAnimationFrame(this.loop);
   }
@@ -212,6 +215,9 @@ export class BadmintonEngine {
           const p2Serve = ballX < 216;
           this.pikaPhysics.player1.initializeForNewRound();
           this.pikaPhysics.player2.initializeForNewRound();
+          if (this.compBoldness !== undefined) {
+            this.pikaPhysics.player2.computerBoldness = this.compBoldness;
+          }
           this.pikaPhysics.ball.initializeForNewRound(p2Serve);
           this.powerHitBuffer = 0; // 下一局開球前徹底確保為 0
           this.keys = { up: false, down: false, left: false, right: false };

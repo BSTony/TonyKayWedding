@@ -103,53 +103,63 @@
     </div>
 
     <!-- Online Count -->
-    <div class="online-players animate-fadeInUp" style="margin-bottom: 16px;">
+    <div class="online-players animate-fadeInUp" style="margin-bottom: 14px;">
       <div class="online-dot"></div>
-      <span id="online-count">...</span> 位玩家在線上
+      <span id="online-count">1</span> 位玩家在線上
     </div>
 
-    <!-- Main CTA -->
-    <button class="main-cta animate-scaleIn" onclick="window.location.href='./game.html'" style="margin-bottom: 16px;">
-      <span class="cta-icon">🏸</span>
-      <span class="cta-title">PLAY MATCH</span>
-      <span class="cta-sub">開始對戰 · 找尋對手</span>
-    </button>
+    <!-- Mode CTAs -->
+    <div class="mode-selection animate-scaleIn" style="display: flex; flex-direction: column; gap: 12px; margin-bottom: 16px;">
+      <!-- Tournament Mode -->
+      <button class="main-cta tournament-cta" onclick="window.location.href='./game.html?mode=tournament'" style="background: linear-gradient(135deg, #f59e0b, #b45309); box-shadow: 0 8px 24px rgba(245, 158, 11, 0.4);">
+        <span class="cta-icon">🏆</span>
+        <span class="cta-title">婚禮錦標賽 (TOURNAMENT)</span>
+        <span class="cta-sub">八強賽 ➔ 四強賽 ➔ 爭奪婚禮總冠軍！</span>
+      </button>
+
+      <!-- Quick Match Mode -->
+      <button class="main-cta" onclick="window.location.href='./game.html?mode=quick'">
+        <span class="cta-icon">🏸</span>
+        <span class="cta-title">快速單人賽 (QUICK MATCH)</span>
+        <span class="cta-sub">直接開戰 · 挑戰新娘 KAY</span>
+      </button>
+    </div>
 
     <!-- Quick links -->
     <div class="quick-links animate-fadeInUp anim-delay-1" style="margin-bottom: 20px;">
       <a class="quick-card" href="./ranking.html">
-        <span class="qc-icon">🏆</span>
+        <span class="qc-icon">👑</span>
         <span class="qc-label">RANKING</span>
-        <span class="qc-label">排行榜</span>
+        <span class="qc-value" style="font-size:16px;">英雄榜</span>
       </a>
       <div class="quick-card" id="bride-groom-card">
         <span class="qc-icon">💍</span>
-        <span class="qc-label">BRIDE & GROOM</span>
-        <span class="qc-label">拯救新人</span>
+        <span class="qc-label">TONY & KAY</span>
+        <span class="qc-value" style="font-size:16px;">婚禮祝福</span>
       </div>
     </div>
 
     <!-- My Stats -->
-    <p class="section-title animate-fadeInUp anim-delay-2">YOUR STATUS</p>
+    <p class="section-title animate-fadeInUp anim-delay-2">YOUR STATUS 戰績</p>
     <div class="card animate-fadeInUp anim-delay-2" style="margin-bottom: 16px;">
       <div class="stats-row">
         <div class="stat-item">
-          <div class="stat-label">RANK</div>
-          <div class="stat-value" id="my-rank">#-</div>
+          <div class="stat-label">RANK 排名</div>
+          <div class="stat-value" id="my-rank">#1</div>
         </div>
         <div class="stat-item">
-          <div class="stat-label">POINTS</div>
+          <div class="stat-label">POINTS 積分</div>
           <div class="stat-value" id="my-points">0</div>
         </div>
         <div class="stat-item">
-          <div class="stat-label">WINS</div>
+          <div class="stat-label">WINS 勝場</div>
           <div class="stat-value" id="my-wins">0</div>
         </div>
       </div>
     </div>
 
     <!-- Recent ranking preview -->
-    <p class="section-title animate-fadeInUp anim-delay-3">LIVE RANKING</p>
+    <p class="section-title animate-fadeInUp anim-delay-3">LIVE RANKING 即時排行</p>
     <div class="card animate-fadeInUp anim-delay-3" id="ranking-preview">
       <div class="flex-center" style="padding: 20px 0;">
         <div class="spinner"></div>
@@ -190,37 +200,49 @@
       document.getElementById('my-wins').textContent = d.wins || 0;
     });
 
-    // Count online players
+    // Count online players & Live Ranking
     const allPlayersRef = ref(db, 'players');
     onValue(allPlayersRef, snap => {
       const data = snap.val() || {};
-      const online = Object.values(data).filter(p => Date.now() - (p.lastSeen || 0) < 60000);
-      document.getElementById('online-count').textContent = online.length;
+      const allPlayersList = Object.values(data);
+      
+      // 計算在線人數 (最少 1 人)
+      const online = allPlayersList.filter(p => Date.now() - (p.lastSeen || 0) < 120000);
+      document.getElementById('online-count').textContent = Math.max(1, online.length);
 
-      // Render ranking preview (top 5)
-      const sorted = online.sort((a, b) => (b.points || 0) - (a.points || 0)).slice(0, 5);
-      const rankEl = document.getElementById('ranking-preview');
+      // 排行榜：排序所有玩家的積分
+      let sorted = allPlayersList.sort((a, b) => (b.points || 0) - (a.points || 0));
+      
+      // 如果資料庫還沒有其他人，放入自己
       if (sorted.length === 0) {
-        rankEl.innerHTML = '<p style="color:var(--text-secondary);text-align:center;padding:20px;font-size:14px;">快叫朋友一起來玩！</p>';
-        return;
+        sorted = [{ uid, nickname, points: Number(document.getElementById('my-points').textContent) || 0 }];
       }
-      rankEl.innerHTML = sorted.map((p, i) => {
-        const medals = ['🥇', '🥈', '🥉'];
+
+      // 我的排名
+      const myIdx = sorted.findIndex(p => p.uid === uid);
+      document.getElementById('my-rank').textContent = myIdx >= 0 ? '#' + (myIdx + 1) : '#1';
+
+      // 渲染前 5 名
+      const top5 = sorted.slice(0, 5);
+      const rankEl = document.getElementById('ranking-preview');
+      const medals = ['🥇', '🥈', '🥉'];
+      
+      rankEl.innerHTML = top5.map((p, i) => {
         const rankClass = i < 3 ? ['gold','silver','bronze'][i] : '';
         return `<div class="rank-row ${p.uid === uid ? 'my-row' : ''}">
           <span class="rank-num ${rankClass}">${medals[i] || '#' + (i+1)}</span>
-          <span class="rank-name">${p.nickname}</span>
+          <span class="rank-name">${p.nickname || '匿名玩家'}</span>
           <span class="rank-points">${p.points || 0} pts</span>
         </div>`;
       }).join('');
-    });
-
-    // My rank
-    onValue(ref(db, 'players'), snap => {
-      const data = snap.val() || {};
-      const sorted = Object.values(data).sort((a,b) => (b.points||0)-(a.points||0));
-      const myIdx = sorted.findIndex(p => p.uid === uid);
-      document.getElementById('my-rank').textContent = myIdx >= 0 ? '#' + (myIdx + 1) : '#-';
+    }, err => {
+      // 離線/連線延遲 fallback
+      const rankEl = document.getElementById('ranking-preview');
+      rankEl.innerHTML = `<div class="rank-row my-row">
+        <span class="rank-num gold">🥇</span>
+        <span class="rank-name">${nickname}</span>
+        <span class="rank-points">0 pts</span>
+      </div>`;
     });
 
     // Bride & groom card

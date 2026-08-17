@@ -1,59 +1,67 @@
-import { db, ref, onValue, update, increment } from './firebase.js';
+import { db, ref, update, increment } from './firebase.js';
 import { BadmintonEngine } from './badmintonEngine.js';
 
-let myTeam = null;
-let myTaps = 0;
-let isPlaying = false;
+const uid = localStorage.getItem('wbc_uid');
+const nickname = localStorage.getItem('wbc_nickname') || '新郎';
 
-// 電腦對戰變數
-let gameEngine = null;
+// 取得遊戲模式 (tournament = 錦標賽, quick = 快速對戰)
+const urlParams = new URLSearchParams(window.location.search);
+const gameMode = urlParams.get('mode') || 'quick';
 
-const screenSelect = document.getElementById('screen-select');
-const screenGame = document.getElementById('screen-game');
-const teamText = document.getElementById('my-team-text');
-const tapBtn = document.getElementById('tap-btn');
-const myTapsEl = document.getElementById('my-taps');
-const gameStatus = document.getElementById('game-status');
+// DOM 元素
+const playerNameBadge = document.getElementById('player-name-badge');
+const opponentNameBadge = document.getElementById('opponent-name-badge');
 const myScoreVsEl = document.getElementById('my-score-vs');
 const compScoreVsEl = document.getElementById('comp-score-vs');
+const tournamentHud = document.getElementById('tournament-hud');
+const tournamentRoundTitle = document.getElementById('tournament-round-title');
 
-const uid = localStorage.getItem('wbc_uid');
+const matchModal = document.getElementById('match-modal');
+const modalIcon = document.getElementById('modal-icon');
+const modalTitle = document.getElementById('modal-title');
+const modalDesc = document.getElementById('modal-desc');
+const modalBtnNext = document.getElementById('modal-btn-next');
 
-// Handle Team Selection
-document.querySelectorAll('.btn-team').forEach(btn => {
-  btn.addEventListener('click', (e) => {
-    // 確保點擊到的元素是 button 或者是往上找 button
-    const targetBtn = e.target.closest('.btn-team');
-    if (!targetBtn) return;
-    
-    myTeam = targetBtn.getAttribute('data-team');
-    
-    screenSelect.classList.add('hidden');
-    screenGame.classList.remove('hidden');
-    
-    if (myTeam === 'left') {
-      teamText.innerText = '👦 新郎隊';
-      tapBtn.style.background = 'linear-gradient(135deg, #4facfe, #00f2fe)';
-    } else if (myTeam === 'right') {
-      teamText.innerText = '👧 新娘隊';
-      tapBtn.style.background = 'linear-gradient(135deg, #ff0844, #ffb199)';
-    } else if (myTeam === 'computer') {
-      teamText.innerText = '🏸 單人對戰 (真實羽球)';
-      screenGame.classList.add('mode-computer');
-      startRealBadmintonMode();
-    }
-  });
-});
+// 設定玩家名稱
+playerNameBadge.textContent = '👦 ' + nickname;
 
-// 單人對戰真實羽球邏輯
-function startRealBadmintonMode() {
-  gameStatus.innerText = '比賽開始！請用下方按鈕操控！';
-  gameStatus.style.background = 'rgba(138,43,226,0.5)';
-  
+// 錦標賽關卡設定
+const TOURNAMENT_ROUNDS = [
+  {
+    stageName: '第一輪 · 八強晉級賽',
+    opponentName: '👦 伴郎皮卡丘',
+    targetScore: 5,
+    boldness: 1,
+    rewardPoints: 50,
+    rewardWins: 1
+  },
+  {
+    stageName: '第二輪 · 四強準決賽',
+    opponentName: '👧 伴娘皮卡丘',
+    targetScore: 5,
+    boldness: 2,
+    rewardPoints: 100,
+    rewardWins: 1
+  },
+  {
+    stageName: '最終決賽 · 總冠軍爭奪',
+    opponentName: '👰 新娘 KAY 👑',
+    targetScore: 7,
+    boldness: 4,
+    rewardPoints: 300,
+    rewardWins: 2
+  }
+];
+
+let currentTournamentRound = 0;
+let gameEngine = null;
+
+// 初始化遊戲引擎
+function initGameEngine() {
   if (!gameEngine) {
     gameEngine = new BadmintonEngine('game-canvas');
-    
-    // ── 虛擬按鈕綁定 ─────────────────────────────────────────
+
+    // ── 虛擬手把綁定 ──
     const btnUp    = document.getElementById('btn-up');
     const btnDown  = document.getElementById('btn-down');
     const btnLeft  = document.getElementById('btn-left');
@@ -72,7 +80,6 @@ function startRealBadmintonMode() {
     bindDirBtn(btnLeft,  'left');
     bindDirBtn(btnRight, 'right');
 
-    // A 鍵（殺球/撲球）— 每次按下觸發一次 powerHit
     if (btnHit) {
       btnHit.addEventListener('pointerdown', (e) => {
         e.preventDefault();
@@ -80,7 +87,7 @@ function startRealBadmintonMode() {
       });
     }
 
-    // ── 鍵盤支援（電腦網頁版）────────────────────────────────
+    // ── 鍵盤監聽 ──
     const KEY_MAP = {
       'ArrowUp':    'up',
       'ArrowDown':  'down',
@@ -90,14 +97,12 @@ function startRealBadmintonMode() {
       'KeyS': 'down',
       'KeyD': 'right',
     };
-    // 攻擊鍵：A / X / Z / Space / Shift / Enter / J / K
     const POWER_KEYS = new Set(['KeyA', 'KeyX', 'Space', 'KeyZ', 'ShiftLeft', 'ShiftRight', 'Enter', 'KeyJ', 'KeyK']);
 
     document.addEventListener('keydown', (e) => {
       const code = e.code;
       const key = e.key ? e.key.toLowerCase() : '';
 
-      // 方向鍵
       if (KEY_MAP[code]) {
         e.preventDefault();
         gameEngine.keys[KEY_MAP[code]] = true;
@@ -115,7 +120,6 @@ function startRealBadmintonMode() {
         gameEngine.keys.right = true;
       }
 
-      // 攻擊 / 殺球鍵 (A / X / Z / Space / Shift / Enter / J / K)
       const isAttackKey = POWER_KEYS.has(code) || 
                           key === 'a' || key === 'x' || key === 'z' || 
                           key === ' ' || key === 'shift' || key === 'enter' ||
@@ -141,7 +145,6 @@ function startRealBadmintonMode() {
       if (key === 'arrowright' || key === 'd') gameEngine.keys.right = false;
     });
 
-    // 視窗失焦時自動清除所有按鍵，避免卡鍵
     window.addEventListener('blur', () => {
       if (gameEngine) {
         gameEngine.keys = { up: false, down: false, left: false, right: false };
@@ -149,90 +152,109 @@ function startRealBadmintonMode() {
       }
     });
 
-    // ── 分數 / 遊戲結束回呼 ──────────────────────────────────
+    // ── 分數更新回呼 ──
     gameEngine.onScoreUpdate = (pScore, cScore) => {
       myScoreVsEl.innerText = pScore;
       compScoreVsEl.innerText = cScore;
     };
-    
+
+    // ── 遊戲結束回呼 ──
     gameEngine.onGameOver = (playerWon) => {
-      if (playerWon) {
-        gameStatus.innerText = '🎉 勝利！你打敗了電腦！(獲得 50 積分)';
-        gameStatus.style.background = 'rgba(0,255,0,0.5)';
-        if (uid) {
-          update(ref(db, 'players/' + uid), {
-            points: increment(50),
-            wins: increment(1)
-          });
-        }
-      } else {
-        gameStatus.innerText = '💀 失敗！再試一次！';
-        gameStatus.style.background = 'rgba(255,0,0,0.5)';
-      }
-      
-      setTimeout(() => {
-        if(confirm('要再挑戰一次嗎？')) {
-          gameEngine.start();
-          gameStatus.innerText = '比賽開始！請用下方按鈕操控！';
-          gameStatus.style.background = 'rgba(138,43,226,0.5)';
-          myScoreVsEl.innerText = '0';
-          compScoreVsEl.innerText = '0';
-        } else {
-          window.location.href = './lobby.html';
-        }
-      }, 3000);
+      handleMatchResult(playerWon);
     };
   }
-  
-  gameEngine.start();
 }
 
+// 開始比賽回合
+function startCurrentMatch() {
+  matchModal.style.display = 'none';
+  myScoreVsEl.innerText = '0';
+  compScoreVsEl.innerText = '0';
 
-
-// Listen to Global Game State (多人連線邏輯)
-const stateRef = ref(db, 'gameState');
-onValue(stateRef, (snapshot) => {
-  if (myTeam === 'computer') return; // 如果是對戰電腦模式，忽略全域狀態
-  
-  const data = snapshot.val();
-  if (!data) return;
-
-  if (data.status === 'waiting') {
-    isPlaying = false;
-    gameStatus.innerText = '等待大螢幕開始...';
-    gameStatus.style.background = 'rgba(255,255,255,0.1)';
-    tapBtn.disabled = true;
-    tapBtn.innerText = '等待中';
-    myTaps = 0;
-    myTapsEl.innerText = myTaps;
-  } else if (data.status === 'playing') {
-    isPlaying = true;
-    gameStatus.innerText = '比賽中！瘋狂點擊！';
-    gameStatus.style.background = 'rgba(255,0,0,0.5)';
-    tapBtn.disabled = false;
-    tapBtn.innerText = '揮拍！\n(點擊)';
-  } else if (data.status === 'finished') {
-    isPlaying = false;
-    gameStatus.innerText = '比賽結束！看大螢幕結果';
-    gameStatus.style.background = 'rgba(0,255,0,0.5)';
-    tapBtn.disabled = true;
-  }
-});
-
-// Handle Tapping
-tapBtn.addEventListener('pointerdown', (e) => {
-  e.preventDefault(); // Prevent zoom/scroll on mobile
-  if (!isPlaying || !myTeam || myTeam === 'computer') return;
-
-  myTaps++;
-  
-  myTapsEl.innerText = myTaps;
-  // Send tap to Firebase for global match
-  const updates = {};
-  if (myTeam === 'left') {
-    updates['gameState/tapsLeft'] = increment(1);
+  if (gameMode === 'tournament') {
+    const roundConfig = TOURNAMENT_ROUNDS[currentTournamentRound];
+    tournamentHud.style.display = 'block';
+    tournamentRoundTitle.innerText = roundConfig.stageName;
+    opponentNameBadge.innerText = roundConfig.opponentName;
+    gameEngine.start(roundConfig.targetScore, roundConfig.boldness);
   } else {
-    updates['gameState/tapsRight'] = increment(1);
+    // 快速對戰模式 (直接打新娘 KAY)
+    tournamentHud.style.display = 'none';
+    opponentNameBadge.innerText = '👰 新娘 KAY';
+    gameEngine.start(5, 2);
   }
-  update(ref(db), updates).catch(err => console.error(err));
-});
+}
+
+// 處理比賽結束結果
+function handleMatchResult(playerWon) {
+  if (gameMode === 'tournament') {
+    const roundConfig = TOURNAMENT_ROUNDS[currentTournamentRound];
+
+    if (playerWon) {
+      // 獲勝
+      if (uid) {
+        update(ref(db, 'players/' + uid), {
+          points: increment(roundConfig.rewardPoints),
+          wins: increment(roundConfig.rewardWins)
+        }).catch(err => console.error(err));
+      }
+
+      if (currentTournamentRound < TOURNAMENT_ROUNDS.length - 1) {
+        // 晉級下一輪
+        modalIcon.innerText = '🎉';
+        modalTitle.innerText = `勝利！晉級${TOURNAMENT_ROUNDS[currentTournamentRound + 1].stageName.split('·')[1]}！`;
+        modalDesc.innerText = `成功擊敗了 ${roundConfig.opponentName}！獲得 +${roundConfig.rewardPoints} 積分！`;
+        modalBtnNext.innerText = '晉級下一輪 ➔';
+        modalBtnNext.onclick = () => {
+          currentTournamentRound++;
+          startCurrentMatch();
+        };
+      } else {
+        // 總冠軍！
+        modalIcon.innerText = '👑';
+        modalTitle.innerText = '🏆 恭喜榮獲婚禮羽球大賽總冠軍！';
+        modalDesc.innerText = `成功擊敗新娘 KAY 贏得最高榮耀！獲得 +${roundConfig.rewardPoints} 積分與冠軍獎盃！`;
+        modalBtnNext.innerText = '查看排行榜 🏆';
+        modalBtnNext.onclick = () => {
+          window.location.href = './ranking.html';
+        };
+      }
+    } else {
+      // 錦標賽落敗
+      modalIcon.innerText = '💀';
+      modalTitle.innerText = '比賽惜敗！';
+      modalDesc.innerText = `未能擊敗 ${roundConfig.opponentName}。再接再厲！`;
+      modalBtnNext.innerText = '重新挑戰本輪 🔄';
+      modalBtnNext.onclick = () => {
+        startCurrentMatch();
+      };
+    }
+  } else {
+    // 快速對戰模式結果
+    if (playerWon) {
+      if (uid) {
+        update(ref(db, 'players/' + uid), {
+          points: increment(50),
+          wins: increment(1)
+        }).catch(err => console.error(err));
+      }
+      modalIcon.innerText = '🎉';
+      modalTitle.innerText = '勝利！你打敗了新娘 KAY！';
+      modalDesc.innerText = '精彩的對決！獲得 +50 積分！';
+    } else {
+      modalIcon.innerText = '💀';
+      modalTitle.innerText = '新娘 KAY 贏得了這場比賽！';
+      modalDesc.innerText = '新娘的球技太強了！要再挑戰一次嗎？';
+    }
+    modalBtnNext.innerText = '再戰一場 🏸';
+    modalBtnNext.onclick = () => {
+      startCurrentMatch();
+    };
+  }
+
+  matchModal.style.display = 'flex';
+}
+
+// 頁面載入直接初始化並開打！
+initGameEngine();
+startCurrentMatch();

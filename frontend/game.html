@@ -3,132 +3,144 @@
 <head>
   <meta charset="UTF-8">
   <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no">
-  <title>開始對戰 🏸</title>
+  <title>婚禮羽球大賽 🏸</title>
   <link rel="stylesheet" href="./style.css">
   <style>
-    body { overflow: hidden; touch-action: manipulation; }
-    .header { padding: 15px; display: flex; align-items: center; gap: 10px; }
-    .header-btn {
-      width: 40px; height: 40px; border-radius: 50%;
-      border: none; background: var(--bg-card);
-      box-shadow: var(--shadow); font-size: 18px; cursor: pointer;
-    }
-    
-    /* 選擇隊伍畫面 */
-    #screen-select { padding: 20px; text-align: center; }
-    .team-cards { display: flex; flex-direction: column; gap: 16px; margin-top: 20px; }
-    .btn-team {
-      background: var(--bg-card);
-      border: 2px solid transparent;
-      border-radius: var(--radius);
-      padding: 24px;
-      font-size: 20px;
-      font-weight: 900;
-      cursor: pointer;
-      box-shadow: var(--shadow);
-      display: flex; flex-direction: column; align-items: center; gap: 8px;
-    }
-    .btn-team.left { color: var(--primary); }
-    .btn-team.right { color: var(--secondary); }
-    .btn-team.computer { color: #8a2be2; border-color: #8a2be2; }
-    
-    /* 遊戲畫面 */
-    #screen-game { display: flex; flex-direction: column; height: 100vh; }
-    .game-header { text-align: center; padding: 20px; }
-    #my-team-text { font-size: 24px; font-weight: 900; }
-    #game-status {
-      margin-top: 10px; padding: 8px 16px; border-radius: 20px;
-      font-size: 14px; font-weight: 700; background: rgba(0,0,0,0.05);
-    }
-    
-    .score-board {
-      display: flex; justify-content: space-around; padding: 20px;
-      background: var(--bg-card); margin: 0 20px; border-radius: var(--radius);
-      box-shadow: var(--shadow);
-    }
-    .score-col { text-align: center; }
-    .score-label { font-size: 12px; color: var(--text-secondary); }
-    .score-val { font-size: 32px; font-weight: 900; }
-    .score-val.me { color: var(--primary); }
-    .score-val.comp { color: var(--secondary); }
-
-    .tap-area {
-      flex: 1; display: flex; align-items: center; justify-content: center;
-      padding: 30px;
-    }
-    #tap-btn {
-      width: 100%; height: 100%; max-height: 400px;
-      border-radius: 40px; border: none;
-      font-size: 40px; font-weight: 900; color: white;
-      background: var(--bg-card);
-      box-shadow: 0 10px 30px rgba(0,0,0,0.15);
-      cursor: pointer;
-      transition: transform 0.05s;
+    body {
+      overflow: hidden;
+      touch-action: manipulation;
+      background: #000;
+      margin: 0;
+      padding: 0;
       user-select: none;
     }
-    #tap-btn:active { transform: scale(0.95); }
-    #tap-btn:disabled { opacity: 0.5; cursor: not-allowed; transform: none; }
-    
-    /* 對戰電腦專屬 (皮卡丘排球版) */
-    .vs-computer-board { display: none; }
-    
-    /* 當進入電腦模式時，強制全螢幕覆蓋 */
-    #screen-game.mode-computer {
-      position: fixed; top: 0; left: 0; width: 100vw; height: 100vh;
-      background: #000; z-index: 9999;
-      display: flex; justify-content: center; align-items: center;
+
+    /* 遊戲主要容器 (強制全螢幕模式) */
+    #screen-game {
+      position: fixed;
+      top: 0; left: 0;
+      width: 100vw; height: 100vh;
+      background: #000;
+      display: flex;
+      justify-content: center;
+      align-items: center;
+      overflow: hidden;
     }
-    
-    /* 如果是直向，提示轉橫向 */
+
+    /* 直向提示轉橫向 */
     .rotate-prompt {
-      display: none; position: absolute; top: 0; left: 0; width: 100%; height: 100%;
-      background: rgba(0,0,0,0.9); color: white; flex-direction: column;
-      align-items: center; justify-content: center; z-index: 10000;
-      font-size: 24px; font-weight: bold; text-align: center; padding: 20px;
+      display: none;
+      position: absolute;
+      top: 0; left: 0; width: 100%; height: 100%;
+      background: rgba(0,0,0,0.95);
+      color: white;
+      flex-direction: column;
+      align-items: center;
+      justify-content: center;
+      z-index: 10000;
+      font-size: 20px;
+      font-weight: bold;
+      text-align: center;
+      padding: 20px;
     }
     @media screen and (orientation: portrait) {
-      #screen-game.mode-computer .rotate-prompt { display: flex; }
-      #screen-game.mode-computer .game-ui { display: none !important; }
+      .rotate-prompt { display: flex !important; }
+      .game-ui { display: none !important; }
     }
-    
-    /* 遊戲主要介面 */
+
+    /* 遊戲主介面 */
     .game-ui {
-      position: relative; width: 100%; height: 100%; display: none;
+      position: relative;
+      width: 100%;
+      height: 100%;
+      display: block;
     }
-    #screen-game.mode-computer .game-ui { display: block; }
-    
-    /* 畫布 */
-    .canvas-container { 
-      position: absolute; top: 0; left: 0; width: 100%; height: 100%; 
-      display: flex; align-items: center; justify-content: center;
+
+    /* 返回大廳按鈕 (頂部左上浮動) */
+    .btn-back-lobby {
+      position: absolute;
+      top: 14px;
+      left: 14px;
+      z-index: 40;
+      width: 36px;
+      height: 36px;
+      border-radius: 50%;
+      background: rgba(15, 23, 42, 0.7);
+      backdrop-filter: blur(8px);
+      border: 1px solid rgba(255, 255, 255, 0.25);
+      color: white;
+      font-size: 16px;
+      display: flex;
+      align-items: center;
+      justify-content: center;
+      cursor: pointer;
+      box-shadow: 0 4px 12px rgba(0,0,0,0.4);
+      transition: all 0.15s;
     }
-    canvas { 
-      display: block; 
-      width: 100%; height: auto;
-      max-height: 100%; 
-      aspect-ratio: 432 / 304; 
-      object-fit: contain; 
-      background: #0f172a; 
-      image-rendering: auto; /* 高畫質抗鋸齒平滑渲染 */
-      box-shadow: 0 12px 36px rgba(0, 0, 0, 0.5);
+    .btn-back-lobby:active { transform: scale(0.9); }
+
+    /* 畫布容器 */
+    .canvas-container {
+      position: absolute;
+      top: 0; left: 0;
+      width: 100%; height: 100%;
+      display: flex;
+      align-items: center;
+      justify-content: center;
+    }
+    canvas {
+      display: block;
+      width: 100%;
+      height: auto;
+      max-height: 100%;
+      aspect-ratio: 432 / 304;
+      object-fit: contain;
+      background: #0f172a;
+      image-rendering: auto;
+      box-shadow: 0 12px 36px rgba(0, 0, 0, 0.6);
       border-radius: 8px;
     }
-    
-    /* 分離式左右分數面板 (高對比玻璃霓虹風，完全避開中央婚禮字樣) */
+
+    /* 錦標賽頂部 HUD 標籤 (優雅懸浮，不擋背景字) */
+    .tournament-hud {
+      position: absolute;
+      top: 8px;
+      left: 50%;
+      transform: translateX(-50%);
+      z-index: 30;
+      background: linear-gradient(135deg, rgba(245, 158, 11, 0.9), rgba(180, 83, 9, 0.9));
+      color: #fff;
+      font-size: 12px;
+      font-weight: 900;
+      letter-spacing: 1px;
+      padding: 4px 14px;
+      border-radius: 20px;
+      box-shadow: 0 4px 16px rgba(245, 158, 11, 0.4);
+      border: 1px solid rgba(255, 255, 255, 0.4);
+      pointer-events: none;
+      display: none;
+    }
+
+    /* 分離式左右雙方名字與計分面板 (高對比霓虹玻璃風) */
     .score-badge {
-      position: absolute; top: 14px; z-index: 30;
-      display: flex; flex-direction: column; align-items: center; justify-content: center;
-      background: rgba(15, 23, 42, 0.78);
+      position: absolute;
+      top: 14px;
+      z-index: 30;
+      display: flex;
+      flex-direction: column;
+      align-items: center;
+      justify-content: center;
+      background: rgba(15, 23, 42, 0.82);
       backdrop-filter: blur(10px);
       -webkit-backdrop-filter: blur(10px);
       border-radius: 14px;
-      padding: 6px 16px;
-      min-width: 76px;
+      padding: 6px 14px;
+      min-width: 80px;
       user-select: none;
       pointer-events: none;
     }
     .score-badge.player-badge {
-      left: 18px;
+      left: 60px;
       border: 2px solid rgba(56, 189, 248, 0.85);
       box-shadow: 0 0 16px rgba(56, 189, 248, 0.4), 0 8px 24px rgba(0, 0, 0, 0.5);
     }
@@ -138,18 +150,22 @@
       box-shadow: 0 0 16px rgba(244, 63, 94, 0.4), 0 8px 24px rgba(0, 0, 0, 0.5);
     }
     .badge-label {
-      font-size: 11px;
+      font-size: 12px;
       font-weight: 900;
-      letter-spacing: 1px;
+      letter-spacing: 0.5px;
       margin-bottom: 2px;
       font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, sans-serif;
+      max-width: 100px;
+      white-space: nowrap;
+      overflow: hidden;
+      text-overflow: ellipsis;
     }
     .player-badge .badge-label { color: #38bdf8; }
     .comp-badge .badge-label { color: #fb7185; }
 
     .badge-score {
       font-family: 'Press Start 2P', monospace;
-      font-size: 26px;
+      font-size: 24px;
       font-weight: bold;
       line-height: 1.1;
     }
@@ -161,117 +177,160 @@
       color: #fb7185;
       text-shadow: 0 0 12px rgba(244, 63, 94, 0.9);
     }
-    
-    /* 虛擬手把 (透明鍵盤風格) */
+
+    /* 虛擬手把 (半透明控制鍵) */
     .controls {
-      position: absolute; bottom: 40px; left: 0; width: 100%;
-      display: flex; justify-content: space-between; padding: 0 40px; z-index: 20;
-      pointer-events: none; /* 讓點擊穿透到按鈕 */
+      position: absolute;
+      bottom: 30px; left: 0; width: 100%;
+      display: flex;
+      justify-content: space-between;
+      padding: 0 35px;
+      z-index: 25;
+      pointer-events: none;
+      box-sizing: border-box;
     }
-    
-    /* 左邊：殺球按鈕 (半透明紅色) */
-    .controls .action { display: flex; align-items: flex-end; pointer-events: auto; }
-    .btn-hit { 
-      width: 90px; height: 90px; border-radius: 50%;
-      background: rgba(220, 38, 38, 0.3); border: 2px solid rgba(255, 255, 255, 0.5);
-      color: white; font-size: 24px; font-weight: bold; font-family: 'Press Start 2P', cursive;
-      display: flex; align-items: center; justify-content: center;
-      user-select: none; touch-action: manipulation;
+
+    /* 左邊：殺球按鈕 (半透明紅色 A 鍵) */
+    .controls .action {
+      display: flex;
+      align-items: flex-end;
+      pointer-events: auto;
     }
-    .btn-hit:active { background: rgba(220, 38, 38, 0.7); }
-    
-    /* 右邊：方向鍵 (倒T型排列，透明框線) */
+    .btn-hit {
+      width: 85px; height: 85px;
+      border-radius: 50%;
+      background: rgba(220, 38, 38, 0.35);
+      border: 2px solid rgba(255, 255, 255, 0.6);
+      color: white;
+      font-size: 24px;
+      font-weight: bold;
+      font-family: 'Press Start 2P', cursive;
+      display: flex;
+      align-items: center;
+      justify-content: center;
+      user-select: none;
+      touch-action: manipulation;
+      box-shadow: 0 6px 16px rgba(0,0,0,0.4);
+    }
+    .btn-hit:active { background: rgba(220, 38, 38, 0.75); }
+
+    /* 右邊：方向鍵 (倒T型排列) */
     .controls .dpad {
-      display: grid; grid-template-columns: 60px 60px 60px; grid-template-rows: 60px 60px;
-      gap: 8px; pointer-events: auto;
+      display: grid;
+      grid-template-columns: 58px 58px 58px;
+      grid-template-rows: 58px 58px;
+      gap: 8px;
+      pointer-events: auto;
     }
     .btn-dir {
-      background: rgba(255, 255, 255, 0.15); border: 2px solid rgba(255, 255, 255, 0.4);
+      background: rgba(255, 255, 255, 0.18);
+      border: 2px solid rgba(255, 255, 255, 0.45);
       border-radius: 12px;
-      display: flex; align-items: center; justify-content: center;
-      user-select: none; touch-action: manipulation; color: white; font-size: 24px;
+      display: flex;
+      align-items: center;
+      justify-content: center;
+      user-select: none;
+      touch-action: manipulation;
+      color: white;
+      font-size: 22px;
+      box-shadow: 0 4px 12px rgba(0,0,0,0.3);
     }
-    .btn-dir:active { background: rgba(255, 255, 255, 0.5); }
-    
+    .btn-dir:active { background: rgba(255, 255, 255, 0.55); }
+
     #btn-up { grid-column: 2; grid-row: 1; }
     #btn-left { grid-column: 1; grid-row: 2; }
     #btn-down { grid-column: 2; grid-row: 2; }
     #btn-right { grid-column: 3; grid-row: 2; }
-    
-    .dpad-center { display: none; }
-    
-    #screen-game.mode-computer .global-board, #screen-game.mode-computer .game-header, #screen-game.mode-computer .tap-area { display: none; }
-    
+
+    /* 遊戲結果彈跳視窗 (晉級 / 冠軍 / 失敗) */
+    .modal-overlay {
+      position: absolute;
+      top: 0; left: 0; width: 100%; height: 100%;
+      background: rgba(0, 0, 0, 0.82);
+      backdrop-filter: blur(8px);
+      z-index: 100;
+      display: none;
+      align-items: center;
+      justify-content: center;
+      animation: fadeIn 0.25s ease;
+    }
+    .modal-card {
+      background: rgba(15, 23, 42, 0.95);
+      border: 2px solid rgba(255, 255, 255, 0.2);
+      border-radius: 20px;
+      padding: 24px 30px;
+      text-align: center;
+      max-width: 320px;
+      width: 85%;
+      box-shadow: 0 20px 50px rgba(0,0,0,0.7);
+      color: white;
+    }
+    .modal-icon { font-size: 52px; margin-bottom: 8px; }
+    .modal-title { font-size: 22px; font-weight: 900; margin-bottom: 6px; }
+    .modal-desc { font-size: 13px; color: rgba(255,255,255,0.8); margin-bottom: 20px; line-height: 1.5; }
+    .modal-btns { display: flex; flex-direction: column; gap: 10px; }
+    .modal-btn {
+      padding: 12px;
+      border-radius: 12px;
+      border: none;
+      font-size: 15px;
+      font-weight: 900;
+      cursor: pointer;
+      transition: all 0.15s;
+    }
+    .modal-btn.primary {
+      background: linear-gradient(135deg, #f59e0b, #d97706);
+      color: white;
+      box-shadow: 0 6px 16px rgba(245, 158, 11, 0.4);
+    }
+    .modal-btn.secondary {
+      background: rgba(255,255,255,0.15);
+      color: white;
+    }
+    .modal-btn:active { transform: scale(0.97); }
+
+    @keyframes fadeIn {
+      from { opacity: 0; }
+      to { opacity: 1; }
+    }
   </style>
 </head>
 <body>
-  <div class="page-bg"></div>
-  
-  <div class="header">
-    <button class="header-btn" onclick="window.location.href='./lobby.html'">🔙</button>
-    <h2 style="font-size: 18px; font-weight: 900;">比賽場地</h2>
-  </div>
-
-  <!-- 選擇隊伍 -->
-  <div id="screen-select" class="animate-fadeInUp">
-    <h1 style="font-size: 28px; font-weight:900;">選擇模式</h1>
-    <p style="color:var(--text-secondary);">請選擇加入隊伍或進行單人練習</p>
-    
-    <div class="team-cards">
-      <button class="btn-team left" data-team="left">
-        <span style="font-size: 40px;">👦</span>
-        加入 新郎隊
-      </button>
-      <button class="btn-team right" data-team="right">
-        <span style="font-size: 40px;">👧</span>
-        加入 新娘隊
-      </button>
-      <button class="btn-team computer" data-team="computer">
-        <span style="font-size: 40px;">🎮</span>
-        皮卡丘打排球 (經典版)
-      </button>
-    </div>
-  </div>
-
-  <!-- 遊戲畫面 -->
-  <div id="screen-game" class="hidden">
-
-    <div class="game-header">
-      <div id="my-team-text">準備中...</div>
-      <div id="game-status">等待大螢幕開始...</div>
-    </div>
-    
-    <!-- 全域連線對戰分數版 (原邏輯) -->
-    <div class="score-board global-board">
-      <div class="score-col">
-        <div class="score-label">我的揮拍次數</div>
-        <div class="score-val me" id="my-taps">0</div>
-      </div>
-    </div>
-    
-    <!-- 皮卡丘打排球 (全螢幕模式) -->
+  <!-- 遊戲畫面容器 -->
+  <div id="screen-game">
+    <!-- 直向轉橫向提示 -->
     <div class="rotate-prompt">
-      <div style="font-size: 50px;">🔄</div>
-      <div style="font-family: 'Press Start 2P', cursive; font-size: 12px; margin-top:20px; line-height:2;">PLEASE ROTATE<br>YOUR DEVICE</div>
+      <div style="font-size: 52px; margin-bottom: 12px;">🔄</div>
+      <div style="font-family: 'Press Start 2P', cursive; font-size: 13px; line-height: 2;">PLEASE ROTATE<br>YOUR DEVICE</div>
+      <p style="font-size: 13px; color: #94a3b8; margin-top: 10px;">請將手機轉為橫向以享受最佳對戰體驗</p>
     </div>
-    
+
+    <!-- 遊戲主要 UI -->
     <div class="game-ui">
-      <!-- 畫布 -->
+      <!-- 返回大廳按鈕 -->
+      <button class="btn-back-lobby" onclick="window.location.href='./lobby.html'" title="返回大廳">🔙</button>
+
+      <!-- 錦標賽階段 HUD -->
+      <div class="tournament-hud" id="tournament-hud">
+        🏆 <span id="tournament-round-title">第一輪 八強賽</span>
+      </div>
+
+      <!-- 畫布容器 -->
       <div class="canvas-container">
         <canvas id="game-canvas"></canvas>
       </div>
-      
-      <!-- 分離式左/右計分板 (避開中央婚禮文字，字體清晰發光) -->
+
+      <!-- 分離式左/右名字與計分板 -->
       <div class="score-badge player-badge">
-        <div class="badge-label">👦 YOU</div>
+        <div class="badge-label" id="player-name-badge">👦 玩家</div>
         <div class="badge-score" id="my-score-vs">0</div>
       </div>
       <div class="score-badge comp-badge">
-        <div class="badge-label">🤖 COM</div>
+        <div class="badge-label" id="opponent-name-badge">👰 KAY</div>
         <div class="badge-score" id="comp-score-vs">0</div>
       </div>
-      
-      <!-- 虛擬手把 -->
+
+      <!-- 虛擬按鈕 -->
       <div class="controls">
         <div class="action">
           <button class="btn-hit" id="btn-hit">A</button>
@@ -284,11 +343,19 @@
           <button class="btn-dir" id="btn-down">⬇️</button>
         </div>
       </div>
-    </div>
 
-    <!-- 多人狂點區域 (僅連線模式顯示) -->
-    <div class="tap-area animate-scaleIn">
-      <button id="tap-btn" disabled>準備中</button>
+      <!-- 比賽結果彈窗 (晉級 / 冠軍 / 重試) -->
+      <div class="modal-overlay" id="match-modal">
+        <div class="modal-card">
+          <div class="modal-icon" id="modal-icon">🎉</div>
+          <div class="modal-title" id="modal-title">勝利！晉級四強賽！</div>
+          <div class="modal-desc" id="modal-desc">擊敗了伴郎皮卡丘！獲得 50 積分！</div>
+          <div class="modal-btns">
+            <button class="modal-btn primary" id="modal-btn-next">繼續下一輪 ➔</button>
+            <button class="modal-btn secondary" id="modal-btn-lobby" onclick="window.location.href='./lobby.html'">返回大廳</button>
+          </div>
+        </div>
+      </div>
     </div>
   </div>
 
