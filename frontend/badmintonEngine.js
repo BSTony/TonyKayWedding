@@ -223,6 +223,35 @@ export class BadmintonEngine {
     if (!state || this.multiplayerRole !== 'guest') return;
     this.remoteHostState = state;
 
+    const p1 = this.pikaPhysics.player1;
+    const p2 = this.pikaPhysics.player2;
+    const b = this.pikaPhysics.ball;
+
+    if (state.p1) {
+      p1.x = state.p1.x;
+      p1.y = state.p1.y;
+      p1.state = state.p1.state;
+      p1.frameNumber = state.p1.frameNumber;
+      p1.divingDirection = state.p1.divingDirection || 1;
+    }
+    if (state.p2) {
+      p2.x = state.p2.x;
+      p2.y = state.p2.y;
+      p2.state = state.p2.state;
+      p2.frameNumber = state.p2.frameNumber;
+      p2.divingDirection = state.p2.divingDirection || -1;
+    }
+    if (state.b) {
+      b.x = state.b.x;
+      b.y = state.b.y;
+      b.rotation = state.b.rot || 0;
+      b.isPowerHit = !!state.b.power;
+      b.previousX = state.b.px !== undefined ? state.b.px : b.x;
+      b.previousY = state.b.py !== undefined ? state.b.py : b.y;
+      b.previousPreviousX = state.b.ppx !== undefined ? state.b.ppx : b.x;
+      b.previousPreviousY = state.b.ppy !== undefined ? state.b.ppy : b.y;
+    }
+
     if (state.s1 !== undefined && state.s2 !== undefined) {
       if (this.playerScore !== state.s1 || this.compScore !== state.s2) {
         this.playerScore = state.s1;
@@ -237,7 +266,7 @@ export class BadmintonEngine {
       if (this.onGameOver) {
         this.onGameOver(this.compScore > this.playerScore);
       }
-    } else if (state.round && state.round !== this.roundState) {
+    } else if (state.round) {
       this.roundState = state.round;
     }
 
@@ -317,81 +346,11 @@ export class BadmintonEngine {
           }));
         }
       }
-
-      if (this.roundState !== 'playing') {
-        return;
-      }
-
-      const p1 = this.pikaPhysics.player1;
-      const p2 = this.pikaPhysics.player2;
-      const b = this.pikaPhysics.ball;
-
-      const p1Input = new PikaUserInput();
-      const p2Input = new PikaUserInput();
-
-      if (this.cloudRole === 'p1') {
-        if (this.keys.left)  p1Input.xDirection = -1;
-        if (this.keys.right) p1Input.xDirection = 1;
-        if (this.keys.up)    p1Input.yDirection = -1;
-        if (this.keys.down)  p1Input.yDirection = 1;
-        if (this.powerHitBuffer > 0) {
-          p1Input.powerHit = 1;
-          this.powerHitBuffer--;
-          if (p1.state === 0 && p1Input.yDirection === 1 && p1Input.xDirection === 0) p1Input.xDirection = 1;
-        }
-      } else {
-        if (this.keys.left)  p2Input.xDirection = -1;
-        if (this.keys.right) p2Input.xDirection = 1;
-        if (this.keys.up)    p2Input.yDirection = -1;
-        if (this.keys.down)  p2Input.yDirection = 1;
-        if (this.powerHitBuffer > 0) {
-          p2Input.powerHit = 1;
-          this.powerHitBuffer--;
-          if (p2.state === 0 && p2Input.yDirection === 1 && p2Input.xDirection === 0) p2Input.xDirection = -1;
-        }
-      }
-
-      this.pikaPhysics.runEngineForNextFrame([p1Input, p2Input]);
-
-      if (this.remoteHostState) {
-        const hs = this.remoteHostState;
-        if (this.cloudRole === 'p1') {
-          if (hs.p2) {
-            p2.x += (hs.p2.x - p2.x) * 0.45;
-            p2.y = hs.p2.y;
-            p2.state = hs.p2.state;
-            p2.frameNumber = hs.p2.frameNumber;
-            p2.divingDirection = hs.p2.divingDirection || -1;
-          }
-        } else {
-          if (hs.p1) {
-            p1.x += (hs.p1.x - p1.x) * 0.45;
-            p1.y = hs.p1.y;
-            p1.state = hs.p1.state;
-            p1.frameNumber = hs.p1.frameNumber;
-            p1.divingDirection = hs.p1.divingDirection || 1;
-          }
-        }
-
-        if (hs.b) {
-          b.x += (hs.b.x - b.x) * 0.45;
-          b.y += (hs.b.y - b.y) * 0.45;
-          if (hs.b.vx !== undefined) b.xVelocity = hs.b.vx;
-          if (hs.b.vy !== undefined) b.yVelocity = hs.b.vy;
-          b.rotation = hs.b.rot || 0;
-          b.isPowerHit = !!hs.b.power;
-          b.previousX = hs.b.px !== undefined ? hs.b.px : b.x;
-          b.previousY = hs.b.py !== undefined ? hs.b.py : b.y;
-          b.previousPreviousX = hs.b.ppx !== undefined ? hs.b.ppx : b.x;
-          b.previousPreviousY = hs.b.ppy !== undefined ? hs.b.ppy : b.y;
-        }
-      }
       return;
     }
 
-    // ── Guest 訪客模式：本地 60 FPS 物理預測 ＋ 平滑網路矯正 ──
+    // ── Guest 訪客模式：發送本地即時搖桿指令給 Host 主機 ──
     if (this.multiplayerRole === 'guest') {
-      // 1. 發送本地即時搖桿指令給 Host 主機 (有動作立即發送，無動作心跳發送)
       if (this.onSendInput) {
         const hit = this.powerHitBuffer > 0 ? 1 : 0;
         const currentInputKey = `${this.keys.left},${this.keys.right},${this.keys.up},${this.keys.down},${hit}`;
@@ -405,66 +364,6 @@ export class BadmintonEngine {
             down: !!this.keys.down,
             powerHit: hit
           });
-        }
-      }
-
-      if (this.roundState !== 'playing') {
-        return;
-      }
-
-      const p1 = this.pikaPhysics.player1;
-      const p2 = this.pikaPhysics.player2;
-      const b = this.pikaPhysics.ball;
-
-      const p1Input = new PikaUserInput();
-      const p2Input = new PikaUserInput();
-
-      // Guest 本地操控 P2 (零延遲 60 FPS 即時物理響應！)
-      if (this.keys.left)  p2Input.xDirection = -1;
-      if (this.keys.right) p2Input.xDirection = 1;
-      if (this.keys.up)    p2Input.yDirection = -1;
-      if (this.keys.down)  p2Input.yDirection = 1;
-
-      if (this.powerHitBuffer > 0) {
-        p2Input.powerHit = 1;
-        this.powerHitBuffer--;
-        if (p2.state === 0 && p2Input.yDirection === 1 && p2Input.xDirection === 0) {
-          p2Input.xDirection = -1;
-        }
-      } else {
-        p2Input.powerHit = 0;
-      }
-
-      // 執行本地 60 FPS 物理運算，確保 60 FPS 絲滑手感
-      this.pikaPhysics.runEngineForNextFrame([p1Input, p2Input]);
-
-      // 2. 接收 Host 廣播進行平滑柔和內插 (Lerp Smoothing)
-      if (this.remoteHostState) {
-        const hs = this.remoteHostState;
-        if (hs.p1) {
-          p1.x += (hs.p1.x - p1.x) * 0.45;
-          p1.y = hs.p1.y;
-          p1.state = hs.p1.state;
-          p1.frameNumber = hs.p1.frameNumber;
-          p1.divingDirection = hs.p1.divingDirection || 1;
-        }
-        if (hs.b) {
-          const dist = Math.hypot(b.x - hs.b.x, b.y - hs.b.y);
-          if (dist > 40) {
-            b.x = hs.b.x;
-            b.y = hs.b.y;
-            if (hs.b.vx !== undefined) b.xVelocity = hs.b.vx;
-            if (hs.b.vy !== undefined) b.yVelocity = hs.b.vy;
-          } else {
-            b.x += (hs.b.x - b.x) * 0.35;
-            b.y += (hs.b.y - b.y) * 0.35;
-          }
-          b.rotation = hs.b.rot || 0;
-          b.isPowerHit = !!hs.b.power;
-          b.previousX = hs.b.px !== undefined ? hs.b.px : b.x;
-          b.previousY = hs.b.py !== undefined ? hs.b.py : b.y;
-          b.previousPreviousX = hs.b.ppx !== undefined ? hs.b.ppx : b.x;
-          b.previousPreviousY = hs.b.ppy !== undefined ? hs.b.ppy : b.y;
         }
       }
       return;

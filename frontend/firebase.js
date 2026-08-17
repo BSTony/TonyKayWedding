@@ -1,5 +1,5 @@
 import { initializeApp } from "firebase/app";
-import { getDatabase, ref, set, get, push, update, onValue, remove, serverTimestamp, increment } from "firebase/database";
+import { getDatabase, ref, set, get, push, update, onValue, remove, serverTimestamp, increment, onDisconnect } from "firebase/database";
 import { getAuth, GoogleAuthProvider, signInWithPopup, signOut, onAuthStateChanged } from "firebase/auth";
 
 const firebaseConfig = {
@@ -18,5 +18,6 @@ const db = getDatabase(app);
 const auth = getAuth(app);
 const googleProvider = new GoogleAuthProvider();
 
-export { db, ref, set, get, push, update, onValue, remove, serverTimestamp, increment, auth, googleProvider, signInWithPopup, signOut, onAuthStateChanged };
+export { db, ref, set, get, push, update, onValue, remove, serverTimestamp, increment, onDisconnect, auth, googleProvider, signInWithPopup, signOut, onAuthStateChanged };
+
 

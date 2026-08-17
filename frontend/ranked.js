@@ -283,18 +283,29 @@ function pairWithAIContender() {
   }, 1200);
 }
 
+let matchEnded = false;
+
 window.addEventListener('beforeunload', () => {
   if (queueRef) remove(queueRef).catch(() => {});
-  if (currentRoomId) remove(ref(db, 'rankedRooms/' + currentRoomId)).catch(() => {});
+  if (currentRoomId && !matchEnded) {
+    set(ref(db, 'rankedRooms/' + currentRoomId + '/abandoned'), { by: uid, name: nickname }).catch(() => {});
+  }
 });
 
 // 進入對決賽場
 function enterArenaMatch() {
   matchingView.style.display = 'none';
   arenaView.style.display = 'block';
+  matchEnded = false;
 
-  arenaP1Name.textContent = `👦 ${nickname} (${myPoints} pts)`;
-  arenaP2Name.textContent = `${currentOpponent.name} (${currentOpponent.points} pts)`;
+  // 永遠保持 P1 = 左側選手，P2 = 右側選手，避免客端名稱反轉
+  if (isHostPlayer) {
+    arenaP1Name.textContent = `👦 ${nickname} (${myPoints} pts) [我]`;
+    arenaP2Name.textContent = `${currentOpponent.name} (${currentOpponent.points} pts)`;
+  } else {
+    arenaP1Name.textContent = `${currentOpponent.name} (${currentOpponent.points} pts)`;
+    arenaP2Name.textContent = `👧 ${nickname} (${myPoints} pts) [我]`;
+  }
   arenaP1Score.textContent = '0';
   arenaP2Score.textContent = '0';
 
@@ -309,12 +320,31 @@ function enterArenaMatch() {
   };
 
   gameEngine.onGameOver = (playerWon) => {
+    matchEnded = true;
     handleRankedGameOver(playerWon);
   };
 
   // 判定真人連線對打 vs 單人 AI
   if (currentOpponent.isRealPlayer && currentRoomId) {
     const role = isHostPlayer ? 'p1' : 'p2';
+
+    // 監聽是否有一方中途離開 / 斷線 (不計勝敗與積分)
+    onDisconnect(ref(db, 'rankedRooms/' + currentRoomId + '/abandoned')).set({ by: uid, name: nickname }).catch(() => {});
+
+    onValue(ref(db, 'rankedRooms/' + currentRoomId + '/abandoned'), (snap) => {
+      const ab = snap.val();
+      if (ab && !matchEnded) {
+        matchEnded = true;
+        if (gameEngine) gameEngine.stop();
+
+        const leaverName = ab.name || '對手';
+        modalIcon.textContent = '🏃‍♂️';
+        modalTitle.textContent = '比賽已取消';
+        modalDesc.textContent = `玩家【${leaverName}】已離開賽事，本局比賽無效（不計勝敗場與積分）！`;
+        matchModal.style.display = 'flex';
+      }
+    });
+
     // 優先讀取自訂雲端伺服器 (若為本地則連線本地，線上若有設定環境則直連雲端伺服器)
     const cloudWsUrl = localStorage.getItem('wbc_cloud_server_url') || (window.location.hostname === 'localhost' ? 'ws://localhost:8080' : null);
 
@@ -388,8 +418,11 @@ function handleRankedGameOver(playerWon) {
   matchModal.style.display = 'flex';
 }
 
-// 退出賽場返回大廳
+// 退出賽場返回大廳 (若比賽進行中離開，通知對手中止並取消本局)
 document.getElementById('btn-exit-arena').addEventListener('click', () => {
+  if (!matchEnded && currentRoomId) {
+    set(ref(db, 'rankedRooms/' + currentRoomId + '/abandoned'), { by: uid, name: nickname }).catch(() => {});
+  }
   if (gameEngine) gameEngine.stop();
   window.location.href = './lobby.html';
 });
