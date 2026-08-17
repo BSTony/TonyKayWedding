@@ -211,59 +211,105 @@
       }
     }
 
-    /* ─── 虛擬手把樣式 ─── */
-    .controls .dpad {
-      display: grid;
-      grid-template-columns: repeat(3, var(--dpad-cell-size));
-      grid-template-rows: repeat(2, var(--dpad-cell-size));
-      gap: var(--dpad-gap);
-      pointer-events: auto;
-      touch-action: none;
-      background: rgba(15, 23, 42, 0.6);
-      padding: var(--dpad-padding);
-      border-radius: calc(var(--dpad-radius) + 8px);
+    /* ─── 圓盤虛擬搖桿 (Joystick Disc) ─── */
+    .controls .joystick-disc {
+      position: relative;
+      width: clamp(125px, 34vw, 155px);
+      height: clamp(125px, 34vw, 155px);
+      max-width: 165px;
+      max-height: 165px;
+      border-radius: 50%;
+      background: radial-gradient(circle, rgba(30, 41, 59, 0.75) 0%, rgba(15, 23, 42, 0.92) 100%);
+      border: 2px solid rgba(255, 255, 255, 0.4);
+      box-shadow: 0 8px 32px rgba(0, 0, 0, 0.65), inset 0 0 20px rgba(56, 189, 248, 0.2);
       backdrop-filter: blur(12px);
       -webkit-backdrop-filter: blur(12px);
-      border: 1.5px solid rgba(255, 255, 255, 0.3);
-      box-shadow: 0 8px 32px rgba(0, 0, 0, 0.6);
-    }
-    .btn-dir {
-      background: radial-gradient(circle, rgba(255, 255, 255, 0.25) 0%, rgba(255, 255, 255, 0.09) 100%);
-      border: 2px solid rgba(255, 255, 255, 0.6);
-      border-radius: var(--dpad-radius);
       display: flex;
       align-items: center;
       justify-content: center;
-      user-select: none;
       touch-action: none;
-      color: white;
-      font-size: var(--dpad-font);
-      box-shadow: 0 4px 14px rgba(0, 0, 0, 0.35), inset 0 1px 2px rgba(255, 255, 255, 0.6);
-      transition: transform 0.08s ease, background 0.08s ease;
+      user-select: none;
+      pointer-events: auto;
     }
-    .btn-dir:active, .btn-dir.active {
-      transform: scale(0.88);
-      background: radial-gradient(circle, rgba(56, 189, 248, 0.75) 0%, rgba(14, 165, 233, 0.4) 100%);
-      border-color: #38bdf8;
-      box-shadow: 0 0 22px rgba(56, 189, 248, 0.9);
-    }
-    #btn-up { grid-column: 2; grid-row: 1; }
-    #btn-left { grid-column: 1; grid-row: 2; }
-    #btn-down { grid-column: 2; grid-row: 2; }
-    #btn-right { grid-column: 3; grid-row: 2; }
 
+    .joystick-arrows {
+      position: absolute;
+      width: 100%; height: 100%;
+      pointer-events: none;
+    }
+    .j-arrow {
+      position: absolute;
+      font-size: 13px;
+      font-weight: 900;
+      color: rgba(255, 255, 255, 0.4);
+      text-shadow: 0 0 6px rgba(56, 189, 248, 0.4);
+      transition: color 0.08s, transform 0.08s;
+    }
+    .j-arrow.active {
+      color: #38bdf8;
+      text-shadow: 0 0 14px #38bdf8;
+      transform: scale(1.25);
+    }
+    .j-up    { top: 8px; left: 50%; transform: translateX(-50%); }
+    .j-down  { bottom: 8px; left: 50%; transform: translateX(-50%); }
+    .j-left  { left: 8px; top: 50%; transform: translateY(-50%); }
+    .j-right { right: 8px; top: 50%; transform: translateY(-50%); }
+
+    /* 八向微光引導圈 */
+    .joystick-crosshair {
+      position: absolute;
+      width: 62%; height: 62%;
+      border-radius: 50%;
+      border: 1.5px dashed rgba(255, 255, 255, 0.18);
+      pointer-events: none;
+    }
+
+    /* 搖桿推桿中心圓鈕 */
+    .joystick-knob {
+      width: clamp(52px, 14vw, 62px);
+      height: clamp(52px, 14vw, 62px);
+      border-radius: 50%;
+      background: radial-gradient(circle, #38bdf8 0%, #0284c7 65%, #0369a1 100%);
+      border: 2.5px solid rgba(255, 255, 255, 0.9);
+      box-shadow: 0 4px 18px rgba(2, 132, 199, 0.7), inset 0 2px 4px rgba(255, 255, 255, 0.8);
+      pointer-events: none;
+      transform: translate(0px, 0px);
+      transition: transform 0.04s ease-out;
+      display: flex;
+      align-items: center;
+      justify-content: center;
+    }
+    .joystick-knob::after {
+      content: '';
+      width: 18px; height: 18px;
+      border-radius: 50%;
+      background: rgba(255, 255, 255, 0.9);
+      box-shadow: 0 0 10px rgba(255, 255, 255, 0.95);
+    }
+    .joystick-knob.active {
+      box-shadow: 0 0 26px rgba(56, 189, 248, 0.95), inset 0 2px 6px rgba(255, 255, 255, 0.95);
+    }
+
+    /* ─── 右手雙按鈕群組 (跳躍 Jump ＋ 殺球 Hit) ─── */
     .controls .action {
       display: flex;
       align-items: flex-end;
       pointer-events: auto;
       touch-action: none;
     }
-    .btn-hit {
-      width: var(--hit-btn-size);
-      height: var(--hit-btn-size);
+
+    .action-buttons-group {
+      display: flex;
+      align-items: center;
+      gap: clamp(10px, 3vw, 16px);
+      pointer-events: auto;
+      touch-action: none;
+    }
+
+    .btn-action {
+      width: clamp(62px, 17vw, 82px);
+      height: clamp(62px, 17vw, 82px);
       border-radius: 50%;
-      background: radial-gradient(circle, rgba(239, 68, 68, 0.75) 0%, rgba(185, 28, 28, 0.5) 100%);
-      border: 3.5px solid rgba(254, 202, 202, 0.9);
       color: white;
       display: flex;
       flex-direction: column;
@@ -271,17 +317,46 @@
       justify-content: center;
       user-select: none;
       touch-action: none;
-      box-shadow: 0 0 28px rgba(239, 68, 68, 0.7), 0 12px 32px rgba(0, 0, 0, 0.6), inset 0 2px 4px rgba(255, 255, 255, 0.7);
       transition: transform 0.08s ease, box-shadow 0.08s ease;
       cursor: pointer;
     }
-    .btn-hit:active, .btn-hit.active {
-      transform: scale(0.86);
-      background: radial-gradient(circle, rgba(248, 113, 113, 0.98) 0%, rgba(220, 38, 38, 0.85) 100%);
-      box-shadow: 0 0 42px rgba(239, 68, 68, 0.95), 0 4px 16px rgba(0,0,0,0.8);
+    .btn-action:active, .btn-action.active {
+      transform: scale(0.88);
     }
-    .btn-hit-icon { font-size: var(--hit-icon-size); line-height: 1; filter: drop-shadow(0 2px 4px rgba(0,0,0,0.4)); }
-    .btn-hit-text { font-size: var(--hit-text-size); font-weight: 900; letter-spacing: 1px; margin-top: 3px; text-shadow: 0 1px 3px rgba(0,0,0,0.8); }
+    .btn-action-icon {
+      font-size: clamp(20px, 6vw, 28px);
+      line-height: 1;
+      filter: drop-shadow(0 2px 4px rgba(0,0,0,0.5));
+    }
+    .btn-action-text {
+      font-size: clamp(11px, 3vw, 13px);
+      font-weight: 900;
+      letter-spacing: 1px;
+      margin-top: 3px;
+      text-shadow: 0 1px 3px rgba(0,0,0,0.8);
+    }
+
+    /* 跳躍鍵 (Sky Blue) */
+    .btn-jump {
+      background: radial-gradient(circle, rgba(14, 165, 233, 0.8) 0%, rgba(2, 132, 199, 0.55) 100%);
+      border: 3px solid rgba(186, 230, 253, 0.9);
+      box-shadow: 0 0 24px rgba(14, 165, 233, 0.7), 0 8px 24px rgba(0, 0, 0, 0.6), inset 0 2px 4px rgba(255, 255, 255, 0.8);
+    }
+    .btn-jump:active, .btn-jump.active {
+      box-shadow: 0 0 36px rgba(56, 189, 248, 0.95), 0 4px 12px rgba(0, 0, 0, 0.8);
+      background: radial-gradient(circle, rgba(56, 189, 248, 0.98) 0%, rgba(14, 165, 233, 0.85) 100%);
+    }
+
+    /* 殺球鍵 (Ruby Red) */
+    .btn-hit {
+      background: radial-gradient(circle, rgba(239, 68, 68, 0.8) 0%, rgba(185, 28, 28, 0.55) 100%);
+      border: 3px solid rgba(254, 202, 202, 0.9);
+      box-shadow: 0 0 24px rgba(239, 68, 68, 0.7), 0 8px 24px rgba(0, 0, 0, 0.6), inset 0 2px 4px rgba(255, 255, 255, 0.8);
+    }
+    .btn-hit:active, .btn-hit.active {
+      box-shadow: 0 0 36px rgba(239, 68, 68, 0.95), 0 4px 12px rgba(0, 0, 0, 0.8);
+      background: radial-gradient(circle, rgba(248, 113, 113, 0.98) 0%, rgba(220, 38, 38, 0.85) 100%);
+    }
 
     /* ─── 核心自適應佈局 (球場在上方完整呈現、手把在下方，絕不互相遮擋) ─── */
     .arena-content {
@@ -495,21 +570,30 @@
         <div class="badge-score" id="arena-p2-score">0</div>
       </div>
 
-      <!-- 手遊經典手把 (左手 D-pad ＋ 右手攻擊圓鈕) -->
+      <!-- 手遊八向圓盤手把 (左手 360° 圓盤搖桿 ＋ 右手攻擊圓鈕) -->
       <div class="controls">
-        <div class="dpad" id="dpad-container">
-          <button class="btn-dir" id="btn-up" data-dir="up">⬆️</button>
-          <button class="btn-dir" id="btn-left" data-dir="left">⬅️</button>
-          <div class="dpad-center"></div>
-          <button class="btn-dir" id="btn-right" data-dir="right">➡️</button>
-          <button class="btn-dir" id="btn-down" data-dir="down">⬇️</button>
+        <div class="joystick-disc" id="joystick-disc">
+          <div class="joystick-arrows">
+            <span class="j-arrow j-up" id="j-up">▲</span>
+            <span class="j-arrow j-right" id="j-right">►</span>
+            <span class="j-arrow j-down" id="j-down">▼</span>
+            <span class="j-arrow j-left" id="j-left">◄</span>
+          </div>
+          <div class="joystick-crosshair"></div>
+          <div class="joystick-knob" id="joystick-knob"></div>
         </div>
 
         <div class="action">
-          <button class="btn-hit" id="btn-hit">
-            <span class="btn-hit-icon">⚡</span>
-            <span class="btn-hit-text">殺球</span>
-          </button>
+          <div class="action-buttons-group">
+            <button class="btn-action btn-jump" id="btn-jump">
+              <span class="btn-action-icon">🚀</span>
+              <span class="btn-action-text">跳躍</span>
+            </button>
+            <button class="btn-action btn-hit" id="btn-hit">
+              <span class="btn-action-icon">⚡</span>
+              <span class="btn-action-text">殺球</span>
+            </button>
+          </div>
         </div>
       </div>
 

@@ -289,7 +289,7 @@ function handleRoomStateSync(room) {
 function startMatchSimulation(p1, p2, isP1, isP2, matchIdx) {
   if (!gameEngine) {
     gameEngine = new BadmintonEngine('game-canvas');
-    bindControls();
+    bindMobileControls();
   }
 
   arenaModal.style.display = 'none';
@@ -328,17 +328,16 @@ function startMatchSimulation(p1, p2, isP1, isP2, matchIdx) {
   gameEngine.start(5, boldness);
 }
 
-// 綁定手把與鍵盤
-// 綁定手把與鍵盤 (支援滑動連續轉向與震動反饋)
-function bindControls() {
-  const dpadContainer = document.getElementById('dpad-container');
+// 手遊控制綁定 (左手 360° 圓盤虛擬搖桿 ＋ 右手【跳躍 Jump】＋【殺球 Hit】雙鍵)
+function bindMobileControls() {
+  const disc = document.getElementById('joystick-disc');
+  const knob = document.getElementById('joystick-knob');
+  const btnJump = document.getElementById('btn-jump');
   const btnHit = document.getElementById('btn-hit');
-  const dirBtns = {
-    up: document.getElementById('btn-up'),
-    down: document.getElementById('btn-down'),
-    left: document.getElementById('btn-left'),
-    right: document.getElementById('btn-right')
-  };
+  const arrowUp = document.getElementById('j-up');
+  const arrowDown = document.getElementById('j-down');
+  const arrowLeft = document.getElementById('j-left');
+  const arrowRight = document.getElementById('j-right');
 
   const triggerHaptic = (ms = 12) => {
     if (typeof navigator !== 'undefined' && navigator.vibrate) {
@@ -346,7 +345,27 @@ function bindControls() {
     }
   };
 
-  // ── 右手殺球鍵 ──
+  // ── 右手按鈕 1：【跳躍 Jump】🚀 ──
+  if (btnJump) {
+    const handleJumpDown = (e) => {
+      e.preventDefault();
+      triggerHaptic(12);
+      btnJump.classList.add('active');
+      if (gameEngine) gameEngine.keys.up = true;
+    };
+    const handleJumpUp = (e) => {
+      e.preventDefault();
+      btnJump.classList.remove('active');
+      if (gameEngine) gameEngine.keys.up = false;
+    };
+
+    btnJump.addEventListener('pointerdown', handleJumpDown);
+    btnJump.addEventListener('pointerup', handleJumpUp);
+    btnJump.addEventListener('pointerleave', handleJumpUp);
+    btnJump.addEventListener('pointercancel', handleJumpUp);
+  }
+
+  // ── 右手按鈕 2：【殺球 / 擊球 Hit】⚡ ──
   if (btnHit) {
     const handleHitDown = (e) => {
       e.preventDefault();
@@ -365,85 +384,130 @@ function bindControls() {
     btnHit.addEventListener('pointercancel', handleHitUp);
   }
 
-  // ── 左手方向鍵滑動轉向判定 ──
-  if (dpadContainer) {
-    const resetDirs = () => {
-      if (gameEngine) gameEngine.keys = { up: false, down: false, left: false, right: false };
-      Object.values(dirBtns).forEach(b => b?.classList.remove('active'));
-    };
+  // ── 左手 360° 八向圓盤虛擬搖桿 ──
+  if (disc && knob) {
+    let isDragging = false;
+    let discRect = null;
+    const MAX_RADIUS = 36;
+    const DEAD_ZONE = 8;
 
-    const handleTouch = (e) => {
-      e.preventDefault();
-      const touches = e.touches ? Array.from(e.touches) : [e];
-      const newKeys = { up: false, down: false, left: false, right: false };
-
-      touches.forEach(t => {
-        const el = document.elementFromPoint(t.clientX, t.clientY);
-        if (el && el.dataset && el.dataset.dir) {
-          newKeys[el.dataset.dir] = true;
-        }
-      });
-
-      let changed = false;
-      for (const k in newKeys) {
-        if (gameEngine && gameEngine.keys[k] !== newKeys[k]) changed = true;
-        if (gameEngine) gameEngine.keys[k] = newKeys[k];
-        if (dirBtns[k]) {
-          if (newKeys[k]) dirBtns[k].classList.add('active');
-          else dirBtns[k].classList.remove('active');
-        }
+    const resetJoystick = () => {
+      isDragging = false;
+      knob.style.transform = 'translate(0px, 0px)';
+      knob.classList.remove('active');
+      if (arrowUp) arrowUp.classList.remove('active');
+      if (arrowDown) arrowDown.classList.remove('active');
+      if (arrowLeft) arrowLeft.classList.remove('active');
+      if (arrowRight) arrowRight.classList.remove('active');
+      if (gameEngine) {
+        const isJumping = btnJump ? btnJump.classList.contains('active') : false;
+        gameEngine.keys.left = false;
+        gameEngine.keys.right = false;
+        gameEngine.keys.down = false;
+        if (!isJumping) gameEngine.keys.up = false;
       }
-      if (changed) triggerHaptic(10);
     };
 
-    dpadContainer.addEventListener('touchstart', handleTouch, { passive: false });
-    dpadContainer.addEventListener('touchmove', handleTouch, { passive: false });
-    dpadContainer.addEventListener('touchend', (e) => {
-      if (!e.touches || e.touches.length === 0) resetDirs();
-      else handleTouch(e);
-    }, { passive: false });
-    dpadContainer.addEventListener('touchcancel', resetDirs, { passive: false });
+    const updateJoystick = (clientX, clientY) => {
+      if (!discRect) discRect = disc.getBoundingClientRect();
+      const centerX = discRect.left + discRect.width / 2;
+      const centerY = discRect.top + discRect.height / 2;
 
-    // Pointer / 滑鼠點擊相容
-    for (const dir in dirBtns) {
-      const btn = dirBtns[dir];
-      if (!btn) continue;
-      btn.addEventListener('pointerdown', (e) => {
-        e.preventDefault();
-        triggerHaptic(10);
-        if (gameEngine) gameEngine.keys[dir] = true;
-        btn.classList.add('active');
-      });
-      btn.addEventListener('pointerup', (e) => {
-        e.preventDefault();
-        if (gameEngine) gameEngine.keys[dir] = false;
-        btn.classList.remove('active');
-      });
-      btn.addEventListener('pointerleave', (e) => {
-        e.preventDefault();
-        if (gameEngine) gameEngine.keys[dir] = false;
-        btn.classList.remove('active');
-      });
-    }
+      let dx = clientX - centerX;
+      let dy = clientY - centerY;
+      const dist = Math.sqrt(dx * dx + dy * dy);
+
+      if (dist > MAX_RADIUS) {
+        dx = (dx / dist) * MAX_RADIUS;
+        dy = (dy / dist) * MAX_RADIUS;
+      }
+
+      knob.style.transform = `translate(${dx}px, ${dy}px)`;
+      knob.classList.add('active');
+
+      const isJumping = btnJump ? btnJump.classList.contains('active') : false;
+      const keys = { up: isJumping, down: false, left: false, right: false };
+
+      if (dist > DEAD_ZONE) {
+        if (dy < -DEAD_ZONE * 0.75) keys.up = true;
+        if (dy > DEAD_ZONE * 0.75) keys.down = true;
+        if (dx < -DEAD_ZONE * 0.75) keys.left = true;
+        if (dx > DEAD_ZONE * 0.75) keys.right = true;
+      }
+
+      if (arrowUp) arrowUp.classList.toggle('active', keys.up);
+      if (arrowDown) arrowDown.classList.toggle('active', keys.down);
+      if (arrowLeft) arrowLeft.classList.toggle('active', keys.left);
+      if (arrowRight) arrowRight.classList.toggle('active', keys.right);
+
+      if (gameEngine) {
+        gameEngine.keys.up = keys.up;
+        gameEngine.keys.down = keys.down;
+        gameEngine.keys.left = keys.left;
+        gameEngine.keys.right = keys.right;
+      }
+    };
+
+    const handlePointerDown = (e) => {
+      e.preventDefault();
+      isDragging = true;
+      discRect = disc.getBoundingClientRect();
+      triggerHaptic(10);
+      updateJoystick(e.clientX, e.clientY);
+    };
+
+    const handlePointerMove = (e) => {
+      if (!isDragging) return;
+      e.preventDefault();
+      updateJoystick(e.clientX, e.clientY);
+    };
+
+    const handleTouchStart = (e) => {
+      e.preventDefault();
+      isDragging = true;
+      discRect = disc.getBoundingClientRect();
+      const t = e.touches[0];
+      if (t) updateJoystick(t.clientX, t.clientY);
+    };
+
+    const handleTouchMove = (e) => {
+      if (!isDragging) return;
+      e.preventDefault();
+      const t = e.touches[0];
+      if (t) updateJoystick(t.clientX, t.clientY);
+    };
+
+    disc.addEventListener('pointerdown', handlePointerDown);
+    window.addEventListener('pointermove', handlePointerMove);
+    window.addEventListener('pointerup', resetJoystick);
+    window.addEventListener('pointercancel', resetJoystick);
+
+    disc.addEventListener('touchstart', handleTouchStart, { passive: false });
+    window.addEventListener('touchmove', handleTouchMove, { passive: false });
+    window.addEventListener('touchend', resetJoystick, { passive: false });
+    window.addEventListener('touchcancel', resetJoystick, { passive: false });
   }
 
   // 鍵盤支援
   const KEY_MAP = {
     'ArrowUp': 'up', 'ArrowDown': 'down', 'ArrowLeft': 'left', 'ArrowRight': 'right',
-    'KeyW': 'up', 'KeyS': 'down', 'KeyD': 'right'
+    'KeyW': 'up', 'KeyS': 'down', 'KeyA': 'left', 'KeyD': 'right'
   };
-  const POWER_KEYS = new Set(['KeyA', 'KeyX', 'Space', 'KeyZ', 'ShiftLeft', 'ShiftRight', 'Enter', 'KeyJ', 'KeyK']);
+  const JUMP_KEYS = new Set(['KeyW', 'ArrowUp', 'Space']);
+  const POWER_KEYS = new Set(['KeyJ', 'KeyK', 'KeyX', 'KeyZ', 'ShiftLeft', 'ShiftRight', 'Enter']);
 
   document.addEventListener('keydown', (e) => {
     const code = e.code;
     const key = e.key ? e.key.toLowerCase() : '';
     if (KEY_MAP[code] && gameEngine) { e.preventDefault(); gameEngine.keys[KEY_MAP[code]] = true; }
-    if ((POWER_KEYS.has(code) || key === 'a' || key === ' ') && gameEngine) { e.preventDefault(); gameEngine.playerHit(); }
+    if (JUMP_KEYS.has(code) && gameEngine) { e.preventDefault(); gameEngine.keys.up = true; }
+    if ((POWER_KEYS.has(code) || key === 'a' || key === 'j') && gameEngine) { e.preventDefault(); gameEngine.playerHit(); }
   });
 
   document.addEventListener('keyup', (e) => {
     const code = e.code;
     if (KEY_MAP[code] && gameEngine) { e.preventDefault(); gameEngine.keys[KEY_MAP[code]] = false; }
+    if (JUMP_KEYS.has(code) && gameEngine) { e.preventDefault(); gameEngine.keys.up = false; }
   });
 }
 
