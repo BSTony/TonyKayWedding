@@ -283,79 +283,72 @@
     .btn-hit-icon { font-size: var(--hit-icon-size); line-height: 1; filter: drop-shadow(0 2px 4px rgba(0,0,0,0.4)); }
     .btn-hit-text { font-size: var(--hit-text-size); font-weight: 900; letter-spacing: 1px; margin-top: 3px; text-shadow: 0 1px 3px rgba(0,0,0,0.8); }
 
-    /* ─── 橫向模式 (Landscape) ─── */
-    @media screen and (orientation: landscape) {
-      .arena-content {
-        position: relative;
-        width: 100%; height: 100%;
-        display: flex; align-items: center; justify-content: center;
-      }
-      .canvas-container {
-        position: absolute;
-        top: 0; left: 0; width: 100%; height: 100%;
-        display: flex; align-items: center; justify-content: center;
-      }
-      canvas {
-        display: block;
-        max-width: 100%; max-height: 100%;
-        width: auto; height: 100%;
-        aspect-ratio: 432 / 304;
-        object-fit: contain;
-        background: #0f172a;
-        image-rendering: auto;
-        box-shadow: 0 12px 36px rgba(0, 0, 0, 0.6);
-        border-radius: 8px;
-      }
-      .controls {
-        position: absolute;
-        bottom: max(14px, env(safe-area-inset-bottom, 14px));
-        left: 0; width: 100%;
-        display: flex; justify-content: space-between; align-items: flex-end;
-        padding: 0 max(24px, env(safe-area-inset-right, 24px));
-        z-index: 25; pointer-events: none; box-sizing: border-box;
-      }
+    /* ─── 核心自適應佈局 (球場在上方完整呈現、手把在下方，絕不互相遮擋) ─── */
+    .arena-content {
+      display: flex;
+      flex-direction: column;
+      width: 100%;
+      height: 100%;
+      justify-content: space-between;
+      box-sizing: border-box;
+    }
+    .canvas-container {
+      position: relative;
+      width: 100%;
+      flex: 1;
+      min-height: 0;
+      display: flex;
+      align-items: center;
+      justify-content: center;
+      padding: 60px 10px 10px 10px;
+      box-sizing: border-box;
+    }
+    canvas {
+      display: block;
+      max-width: 100%;
+      max-height: 100%;
+      aspect-ratio: 432 / 304;
+      object-fit: contain;
+      background: #0f172a;
+      image-rendering: auto;
+      box-shadow: 0 8px 30px rgba(0, 0, 0, 0.7);
+      border-radius: 12px;
+      border: 2px solid rgba(255, 255, 255, 0.15);
+    }
+    .controls {
+      position: relative;
+      width: 100%;
+      display: flex;
+      justify-content: space-between;
+      align-items: center;
+      padding: 12px 16px max(16px, env(safe-area-inset-bottom, 16px)) 16px;
+      background: rgba(15, 23, 42, 0.94);
+      backdrop-filter: blur(16px);
+      -webkit-backdrop-filter: blur(16px);
+      border-top: 1px solid rgba(255, 255, 255, 0.15);
+      box-sizing: border-box;
+      z-index: 25;
+      flex-shrink: 0;
     }
 
-    /* ─── 直向模式 (Portrait - 上方球場 + 下方自適應手把) ─── */
-    @media screen and (orientation: portrait) {
-      .arena-content {
-        display: flex; flex-direction: column;
-        width: 100%; height: 100%;
-        justify-content: space-between;
-        box-sizing: border-box;
-      }
+    /* ─── 僅在超寬橫向螢幕 (寬高比 >= 1.7) 啟用兩側懸浮手把 ─── */
+    @media screen and (min-aspect-ratio: 17/10) and (min-height: 320px) {
       .canvas-container {
-        position: relative;
-        width: 100%; flex: 1;
-        display: flex; align-items: center; justify-content: center;
-        padding: 60px 10px 10px 10px;
-        box-sizing: border-box;
-        min-height: 200px;
-      }
-      canvas {
-        display: block;
-        width: 100% !important;
-        height: auto !important;
-        max-height: 100%;
-        aspect-ratio: 432 / 304;
-        object-fit: contain;
-        background: #0f172a;
-        image-rendering: auto;
-        box-shadow: 0 8px 30px rgba(0, 0, 0, 0.7);
-        border-radius: 12px;
-        border: 2px solid rgba(255, 255, 255, 0.15);
+        position: absolute;
+        top: 0; left: 0;
+        width: 100%; height: 100%;
+        padding: 50px 20px 20px 20px;
       }
       .controls {
-        position: relative !important;
-        bottom: auto !important; left: auto !important; width: 100% !important;
-        display: flex !important; justify-content: space-between !important; align-items: center !important;
-        padding: 14px 16px max(20px, env(safe-area-inset-bottom, 20px)) 16px !important;
-        background: rgba(15, 23, 42, 0.92);
-        backdrop-filter: blur(16px);
-        -webkit-backdrop-filter: blur(16px);
-        border-top: 1px solid rgba(255, 255, 255, 0.15);
-        box-sizing: border-box;
-        z-index: 25;
+        position: absolute;
+        bottom: max(10px, env(safe-area-inset-bottom, 10px));
+        left: 0;
+        background: transparent;
+        border-top: none;
+        backdrop-filter: none;
+        -webkit-backdrop-filter: none;
+        padding: 0 max(24px, env(safe-area-inset-right, 24px));
+        pointer-events: none;
       }
     }
 
