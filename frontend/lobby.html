@@ -94,12 +94,30 @@
   <div class="page">
     <!-- Header -->
     <div class="lobby-header animate-slideDown">
-      <div class="avatar" id="player-avatar">🏸</div>
+      <div class="avatar" id="player-avatar" style="overflow:hidden; display:flex; align-items:center; justify-content:center;">🏆</div>
       <div class="greeting">
         <h2>HELLO, <span id="player-name">玩家</span>！</h2>
-        <p>歡迎來到婚禮大賽</p>
+        <p id="account-status-text" style="font-size: 12px; margin-top: 2px;">歡迎來到婚禮大賽</p>
       </div>
-      <button class="settings-btn" onclick="window.location.href='./nickname.html'">⚙️</button>
+      <div style="display:flex; gap:6px;">
+        <button class="settings-btn" id="btn-logout" title="登出 / 切換帳號" style="display:none; font-size:14px;">🚪</button>
+        <button class="settings-btn" onclick="window.location.href='./nickname.html'" title="設定暱稱">⚙️</button>
+      </div>
+    </div>
+
+    <!-- Google 綁定提示卡 (僅在訪客模式時顯示) -->
+    <div id="guest-upgrade-card" class="card animate-fadeInUp" style="display:none; background: linear-gradient(135deg, rgba(255,255,255,0.95), rgba(240,253,244,0.95)); border: 1.5px solid #86efac; margin-bottom: 14px; padding: 12px 14px;">
+      <div style="display:flex; align-items:center; justify-content:space-between; gap:10px;">
+        <div>
+          <div style="font-size:13px; font-weight:800; color:#166534; display:flex; align-items:center; gap:4px;">
+            <span>🌟</span> 保存天梯積分與戰績
+          </div>
+          <div style="font-size:11px; color:#15803d; margin-top:2px;">登入 Google 帳號，每次進入自動代入積分！</div>
+        </div>
+        <button id="btn-lobby-google-login" style="background:#16a34a; color:white; border:none; border-radius:10px; padding:8px 12px; font-size:12px; font-weight:800; cursor:pointer; white-space:nowrap; box-shadow:0 2px 8px rgba(22,163,74,0.3);">
+          Google 登入
+        </button>
+      </div>
     </div>
 
     <!-- Online Count -->
@@ -132,8 +150,6 @@
       </button>
     </div>
 
-
-
     <!-- My Stats -->
     <p class="section-title animate-fadeInUp anim-delay-2">YOUR STATUS 戰績</p>
     <div class="card animate-fadeInUp anim-delay-2" style="margin-bottom: 16px;">
@@ -165,42 +181,139 @@
   </div>
 
   <script type="module">
-    import { db, ref, onValue, set, update } from './firebase.js';
+    import { db, ref, onValue, set, get, update, auth, googleProvider, signInWithPopup, signOut } from './firebase.js';
 
-    const EMOJIS = ['🏸', '👑', '⚡', '🌸', '🦋', '🎯', '🔥', '🌟', '💪', '🐼'];
-    const uid = localStorage.getItem('wbc_uid') || ('user_' + Math.floor(Math.random()*1000000));
-    const nickname = localStorage.getItem('wbc_nickname') || '婚禮嘉賓';
+    const EMOJIS = ['🏆', '👑', '⚡', '🌸', '🦋', '🎯', '🔥', '🌟', '💪', '🐼'];
+    
+    // 檢查是否為 Google 登入者
+    const isGoogleUser = localStorage.getItem('wbc_is_google') === 'true';
+    let uid = localStorage.getItem('wbc_uid');
+    let nickname = localStorage.getItem('wbc_nickname') || '婚禮嘉賓';
+    let photoURL = localStorage.getItem('wbc_photo') || '';
 
-    localStorage.setItem('wbc_uid', uid);
-    localStorage.setItem('wbc_nickname', nickname);
+    // 若為訪客且沒有 uid，產生全新訪客 UID，初始積分 0
+    if (!uid) {
+      uid = 'guest_' + Date.now() + '_' + Math.random().toString(36).slice(2, 6);
+      localStorage.setItem('wbc_uid', uid);
+      localStorage.setItem('wbc_nickname', nickname);
+      localStorage.setItem('wbc_points', 0);
+      localStorage.setItem('wbc_wins', 0);
+      localStorage.setItem('wbc_is_google', 'false');
+    }
 
-    // 立即初始化預設畫面 (絕不等待網路)
+    const avatarEl = document.getElementById('player-avatar');
+    const nameEl = document.getElementById('player-name');
+    const statusTextEl = document.getElementById('account-status-text');
+    const guestCardEl = document.getElementById('guest-upgrade-card');
+    const btnLogout = document.getElementById('btn-logout');
+    const btnLobbyGoogle = document.getElementById('btn-lobby-google-login');
+
+    nameEl.textContent = nickname;
     document.getElementById('preview-my-name').textContent = nickname;
     document.getElementById('online-count').textContent = '1';
 
-    // Set avatar
-    const code = nickname?.charCodeAt(0) || 0;
-    document.getElementById('player-avatar').textContent = EMOJIS[code % EMOJIS.length];
-    document.getElementById('player-name').textContent = nickname;
+    // 渲染帳號狀態
+    if (isGoogleUser) {
+      statusTextEl.innerHTML = '<span style="color:#10b981; font-weight:700;">🟢 Google 雲端存檔已連線</span>';
+      guestCardEl.style.display = 'none';
+      btnLogout.style.display = 'inline-flex';
 
-    // Register / update player in Firebase
+      if (photoURL) {
+        avatarEl.innerHTML = `<img src="${photoURL}" style="width:100%; height:100%; border-radius:50%; object-fit:cover;" onerror="this.outerHTML='👑'">`;
+      } else {
+        avatarEl.textContent = '👑';
+      }
+    } else {
+      statusTextEl.innerHTML = '<span style="color:#94a3b8; font-weight:600;">⚪ 訪客模式 (本次 0 分起計)</span>';
+      guestCardEl.style.display = 'block';
+      btnLogout.style.display = 'none';
+
+      const code = nickname?.charCodeAt(0) || 0;
+      avatarEl.textContent = EMOJIS[code % EMOJIS.length];
+    }
+
+    // Google 登入按鈕
+    btnLobbyGoogle.addEventListener('click', async () => {
+      try {
+        btnLobbyGoogle.disabled = true;
+        btnLobbyGoogle.textContent = '登入中...';
+        const result = await signInWithPopup(auth, googleProvider);
+        const user = result.user;
+        const googleUid = 'google_' + user.uid;
+        const googleName = user.displayName || 'Google玩家';
+        const photo = user.photoURL || '';
+
+        const playerSnap = await get(ref(db, 'players/' + googleUid));
+        let points = 0;
+        let wins = 0;
+        let savedNickname = googleName;
+
+        if (playerSnap.exists()) {
+          const pData = playerSnap.val();
+          points = pData.points !== undefined ? pData.points : 0;
+          wins = pData.wins !== undefined ? pData.wins : 0;
+          if (pData.nickname) savedNickname = pData.nickname;
+        } else {
+          await set(ref(db, 'players/' + googleUid), {
+            uid: googleUid,
+            nickname: savedNickname,
+            photoURL: photo,
+            points: 0,
+            wins: 0,
+            isGoogleUser: true,
+            createdAt: Date.now(),
+            lastSeen: Date.now()
+          });
+        }
+
+        localStorage.setItem('wbc_uid', googleUid);
+        localStorage.setItem('wbc_nickname', savedNickname);
+        localStorage.setItem('wbc_photo', photo);
+        localStorage.setItem('wbc_is_google', 'true');
+        localStorage.setItem('wbc_points', points);
+        localStorage.setItem('wbc_wins', wins);
+
+        window.location.reload();
+      } catch (err) {
+        console.error('Lobby Google login error:', err);
+        btnLobbyGoogle.disabled = false;
+        btnLobbyGoogle.textContent = 'Google 登入';
+        alert('Google 登入連線提示：' + (err.message || err));
+      }
+    });
+
+    // 登出按鈕
+    btnLogout.addEventListener('click', async () => {
+      if (confirm('確定要登出 Google 帳號並切換為訪客模式嗎？')) {
+        try {
+          await signOut(auth);
+        } catch (e) {}
+        localStorage.clear();
+        window.location.href = './nickname.html';
+      }
+    });
+
+    // Firebase 註冊與狀態同步
     const playerRef = ref(db, 'players/' + uid);
     update(playerRef, {
       nickname,
       uid,
       status: 'lobby',
+      isGoogleUser: isGoogleUser,
       lastSeen: Date.now()
-    });
+    }).catch(() => {});
 
-    // Listen to own player data
+    // 監聽自身戰績數據
     onValue(playerRef, snap => {
       const d = snap.val();
       if (!d) return;
       document.getElementById('my-points').textContent = d.points || 0;
       document.getElementById('my-wins').textContent = d.wins || 0;
+      localStorage.setItem('wbc_points', d.points || 0);
+      localStorage.setItem('wbc_wins', d.wins || 0);
     });
 
-    // Count online players & Live Ranking
+    // 計算在線人數與即時排行榜
     const allPlayersRef = ref(db, 'players');
     onValue(allPlayersRef, snap => {
       const data = snap.val() || {};
@@ -213,7 +326,6 @@
       // 排行榜：排序所有玩家的積分
       let sorted = allPlayersList.sort((a, b) => (b.points || 0) - (a.points || 0));
       
-      // 如果資料庫還沒有其他人，放入自己
       if (sorted.length === 0) {
         sorted = [{ uid, nickname, points: Number(document.getElementById('my-points').textContent) || 0 }];
       }
@@ -229,14 +341,14 @@
       
       rankEl.innerHTML = top5.map((p, i) => {
         const rankClass = i < 3 ? ['gold','silver','bronze'][i] : '';
+        const googleMark = p.isGoogleUser ? ' <span style="font-size:10px; color:#10b981;">✓</span>' : '';
         return `<div class="rank-row ${p.uid === uid ? 'my-row' : ''}">
           <span class="rank-num ${rankClass}">${medals[i] || '#' + (i+1)}</span>
-          <span class="rank-name">${p.nickname || '匿名玩家'}</span>
+          <span class="rank-name">${p.nickname || '匿名玩家'}${googleMark}</span>
           <span class="rank-points">${p.points || 0} pts</span>
         </div>`;
       }).join('');
     }, err => {
-      // 離線/連線延遲 fallback
       const rankEl = document.getElementById('ranking-preview');
       rankEl.innerHTML = `<div class="rank-row my-row">
         <span class="rank-num gold">🥇</span>
@@ -245,11 +357,9 @@
       </div>`;
     });
 
-
-
-    // Keep lastSeen alive
+    // 定期保活
     setInterval(() => {
-      update(playerRef, { lastSeen: Date.now() });
+      update(playerRef, { lastSeen: Date.now() }).catch(() => {});
     }, 15000);
   </script>
 </body>
