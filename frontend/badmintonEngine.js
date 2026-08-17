@@ -125,30 +125,33 @@ export class BadmintonEngine {
     this.ctx.fillRect(0, 0, 432, 304);
     
     // 背景：山脈
-    this.drawSprite('objects/mountain.png', 0, 244 - 110);
+    this.drawSprite('objects/mountain.png', 0, 188);
     
     // 背景：雲朵
     this.drawSprite('objects/cloud.png', 30, 40);
     this.drawSprite('objects/cloud.png', 180, 20);
     this.drawSprite('objects/cloud.png', 320, 60);
 
-    // 地板與網子
-    this.drawSprite('objects/ground_red.png', 0, 244);
-    this.ctx.fillStyle = '#facc15'; 
-    this.ctx.fillRect(0, 244 + 4, 432, 304 - (244 + 4)); // ground_yellow 等效
+    // 地板 (紅色邊緣與黃色區域，皆為 16x16 的像素圖塊)
+    for (let i = 0; i < 432; i += 16) {
+      this.drawSprite('objects/ground_red.png', i, 248);
+      for (let j = 248 + 16; j < 304; j += 16) {
+        this.drawSprite('objects/ground_yellow.png', i, j);
+      }
+    }
     
-    this.ctx.fillStyle = '#ef4444';
-    this.ctx.fillRect(216 - 8, 176, 16, 16); // 網柱紅頭
-    this.ctx.fillStyle = '#9ca3af';
-    this.ctx.fillRect(216 - 8, 176 + 16, 16, 304 - (176 + 16)); // 網柱灰身
+    // 網柱
+    this.drawSprite('objects/net_pillar_top.png', 213, 176);
+    this.drawSprite('objects/net_pillar.png', 213, 192);
 
     // 玩家
     const p1 = this.pikaPhysics.player1;
     const p2 = this.pikaPhysics.player2;
     
-    this.drawSprite(`pikachu/pikachu_${p1.state}_${p1.frameNumber}.png`, p1.x, p1.y, false);
+    // physics.js 裡的 x, y 代表物理碰撞的中心座標，因此畫圖時需要位移 (-32, -32)
+    this.drawSprite(`pikachu/pikachu_${p1.state}_${p1.frameNumber}.png`, p1.x - 32, p1.y - 32, false);
     // 電腦在右邊，需要水平翻轉圖片
-    this.drawSprite(`pikachu/pikachu_${p2.state}_${p2.frameNumber}.png`, p2.x, p2.y, true);
+    this.drawSprite(`pikachu/pikachu_${p2.state}_${p2.frameNumber}.png`, p2.x - 32, p2.y - 32, true);
 
     // 寶貝球
     const b = this.pikaPhysics.ball;
