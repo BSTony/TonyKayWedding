@@ -1,8 +1,8 @@
 import { PikaPhysics, PikaUserInput } from './physics.js';
 
 /**
- * Pikachu Volleyball Engine
- * 完美復刻原版皮卡丘打排球物理與畫面
+ * Pikachu Volleyball Engine - 完美復刻
+ * 鍵盤操作：方向鍵 / WASD 移動，A 或 X 或 Space 殺球
  *
  * 原版座標系：
  *   玩家 x,y = 中心點  (64x64 sprite, 所以左上角 = x-32, y-32)
@@ -215,10 +215,20 @@ export class BadmintonEngine {
     // ── 球 ──
     const b = this.pikaPhysics.ball;
 
-    // 殺球特效 (punch effect)
+    // 殺球特效 (punch effect) — 每幀縮小 2px，直到消失
     if (b.punchEffectRadius > 0) {
-      // ball_punch sprite 40x40，以 punchEffectX/Y 為中心
-      this.drawSprite('ball/ball_punch.png', b.punchEffectX - 20, b.punchEffectY - 20);
+      b.punchEffectRadius -= 2; // 模擬原版 view.js 的遞減邏輯
+      const r = b.punchEffectRadius;
+      if (r > 0) {
+        // 以 punchEffectX/Y 為中心，依半徑縮放繪製
+        const scale = r / 20;
+        const sw = 40 * scale;
+        const sh = 40 * scale;
+        this.drawSprite('ball/ball_punch.png',
+          b.punchEffectX - sw / 2,
+          b.punchEffectY - sh / 2
+        );
+      }
     }
 
     if (b.isPowerHit) {

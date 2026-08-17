@@ -88,10 +88,11 @@ function startRealBadmintonMode() {
       'ArrowRight': 'right',
       'KeyW': 'up',
       'KeyS': 'down',
-      'KeyA': 'left',
-      'KeyD': 'right',
+      // 注意: KeyA 保留給攻擊，移動左改用方向鍵或不使用 A
     };
-    const POWER_KEYS = new Set(['KeyX', 'Space', 'KeyZ', 'ShiftLeft', 'ShiftRight']);
+    // 攻擊鍵：A / X / Z / Space / Shift
+    const POWER_KEYS = new Set(['KeyA', 'KeyX', 'Space', 'KeyZ', 'ShiftLeft', 'ShiftRight']);
+
 
     document.addEventListener('keydown', (e) => {
       if (KEY_MAP[e.code]) {
