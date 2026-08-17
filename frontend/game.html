@@ -98,8 +98,19 @@
     #screen-game.mode-computer .game-ui { display: block; }
     
     /* 畫布 */
-    .canvas-container { position: absolute; top: 0; left: 0; width: 100%; height: 100%; }
-    canvas { display: block; width: 100%; height: 100%; background: #e0f7fa; }
+    .canvas-container { 
+      position: absolute; top: 0; left: 0; width: 100%; height: 100%; 
+      display: flex; align-items: center; justify-content: center;
+    }
+    canvas { 
+      display: block; 
+      width: 100%; height: auto;
+      max-height: 100%; 
+      aspect-ratio: 432 / 304; 
+      object-fit: contain; 
+      background: #6cb4e4; 
+      image-rendering: pixelated; /* 像素風 */
+    }
     
     /* 橫向分數板 (黑底黃字復古風) */
     .score-board.vs-computer-board {
@@ -109,54 +120,43 @@
       font-family: 'Press Start 2P', cursive; color: #facc15;
     }
     
-    /* 虛擬手把 (GameBoy 風格) */
+    /* 虛擬手把 (透明鍵盤風格) */
     .controls {
-      position: absolute; bottom: 20px; left: 0; width: 100%;
+      position: absolute; bottom: 40px; left: 0; width: 100%;
       display: flex; justify-content: space-between; padding: 0 40px; z-index: 20;
       pointer-events: none; /* 讓點擊穿透到按鈕 */
     }
     
-    /* 左邊：殺球按鈕 (經典紅色大圓鈕) */
+    /* 左邊：殺球按鈕 (半透明紅色) */
     .controls .action { display: flex; align-items: flex-end; pointer-events: auto; }
     .btn-hit { 
-      width: 80px; height: 80px; border-radius: 50%;
-      background: #dc2626; border: 4px solid #7f1d1d;
-      color: white; font-size: 14px; font-weight: bold; font-family: 'Press Start 2P', cursive;
+      width: 90px; height: 90px; border-radius: 50%;
+      background: rgba(220, 38, 38, 0.3); border: 2px solid rgba(255, 255, 255, 0.5);
+      color: white; font-size: 24px; font-weight: bold; font-family: 'Press Start 2P', cursive;
       display: flex; align-items: center; justify-content: center;
       user-select: none; touch-action: manipulation;
-      box-shadow: 2px 4px 0 #450a0a, inset -2px -2px 0 rgba(0,0,0,0.2);
-      text-shadow: 1px 1px 0 #000;
     }
-    .btn-hit:active { transform: translateY(4px); box-shadow: 0px 0px 0 #450a0a; }
+    .btn-hit:active { background: rgba(220, 38, 38, 0.7); }
     
-    /* 右邊：十字鍵 (經典黑色十字) */
+    /* 右邊：方向鍵 (倒T型排列，透明框線) */
     .controls .dpad {
-      display: grid; grid-template-columns: 50px 50px 50px; grid-template-rows: 50px 50px 50px;
-      gap: 0; pointer-events: auto; opacity: 0.8;
+      display: grid; grid-template-columns: 60px 60px 60px; grid-template-rows: 60px 60px;
+      gap: 8px; pointer-events: auto;
     }
     .btn-dir {
-      background: #333; border: none;
+      background: rgba(255, 255, 255, 0.15); border: 2px solid rgba(255, 255, 255, 0.4);
+      border-radius: 12px;
       display: flex; align-items: center; justify-content: center;
-      user-select: none; touch-action: manipulation; color: transparent; /* 隱藏箭頭符號 */
-      position: relative;
+      user-select: none; touch-action: manipulation; color: white; font-size: 24px;
     }
-    .btn-dir:active { background: #111; }
+    .btn-dir:active { background: rgba(255, 255, 255, 0.5); }
     
-    /* 偽十字外觀 */
-    #btn-up { grid-column: 2; grid-row: 1; border-radius: 8px 8px 0 0; box-shadow: inset 2px 2px 0 rgba(255,255,255,0.1); }
-    #btn-left { grid-column: 1; grid-row: 2; border-radius: 8px 0 0 8px; box-shadow: inset 2px -2px 0 rgba(255,255,255,0.1); }
-    #btn-right { grid-column: 3; grid-row: 2; border-radius: 0 8px 8px 0; box-shadow: inset -2px -2px 0 rgba(0,0,0,0.4); }
-    #btn-down { grid-column: 2; grid-row: 3; border-radius: 0 0 8px 8px; box-shadow: inset 0 -2px 0 rgba(0,0,0,0.4); }
+    #btn-up { grid-column: 2; grid-row: 1; }
+    #btn-left { grid-column: 1; grid-row: 2; }
+    #btn-down { grid-column: 2; grid-row: 2; }
+    #btn-right { grid-column: 3; grid-row: 2; }
     
-    /* 十字中心裝飾 */
-    .dpad-center {
-      grid-column: 2; grid-row: 2; background: #333;
-      display: flex; align-items: center; justify-content: center;
-    }
-    .dpad-center::after {
-      content: ''; width: 20px; height: 20px; border-radius: 50%;
-      background: #111;
-    }
+    .dpad-center { display: none; }
     
     #screen-game.mode-computer .global-board, #screen-game.mode-computer .game-header, #screen-game.mode-computer .tap-area { display: none; }
     
@@ -193,6 +193,7 @@
 
   <!-- 遊戲畫面 -->
   <div id="screen-game" class="hidden">
+    <div style="position: absolute; top: 10px; left: 10px; color: white; font-size: 14px; font-weight: bold; z-index: 99999; font-family: monospace;">Ver: 2.0 (透明按鍵)</div>
     <div class="game-header">
       <div id="my-team-text">準備中...</div>
       <div id="game-status">等待大螢幕開始...</div>
