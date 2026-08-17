@@ -76,30 +76,101 @@ function initGameEngine() {
   if (!gameEngine) {
     gameEngine = new BadmintonEngine('game-canvas');
 
-    // ── 虛擬手把綁定 ──
-    const btnUp    = document.getElementById('btn-up');
-    const btnDown  = document.getElementById('btn-down');
-    const btnLeft  = document.getElementById('btn-left');
-    const btnRight = document.getElementById('btn-right');
-    const btnHit   = document.getElementById('btn-hit');
-
-    const bindDirBtn = (btn, key) => {
-      if (!btn) return;
-      btn.addEventListener('pointerdown',  (e) => { e.preventDefault(); gameEngine.keys[key] = true; });
-      btn.addEventListener('pointerup',    (e) => { e.preventDefault(); gameEngine.keys[key] = false; });
-      btn.addEventListener('pointerleave', (e) => { e.preventDefault(); gameEngine.keys[key] = false; });
+    // ── 現代手遊級虛擬手把綁定 (支援手指滑動連續轉向與震動反饋) ──
+    const dpadContainer = document.getElementById('dpad-container');
+    const btnHit = document.getElementById('btn-hit');
+    const dirBtns = {
+      up: document.getElementById('btn-up'),
+      down: document.getElementById('btn-down'),
+      left: document.getElementById('btn-left'),
+      right: document.getElementById('btn-right')
     };
 
-    bindDirBtn(btnUp,    'up');
-    bindDirBtn(btnDown,  'down');
-    bindDirBtn(btnLeft,  'left');
-    bindDirBtn(btnRight, 'right');
+    const triggerHaptic = (ms = 12) => {
+      if (typeof navigator !== 'undefined' && navigator.vibrate) {
+        try { navigator.vibrate(ms); } catch (err) {}
+      }
+    };
 
+    // ── 右手殺球鍵 ──
     if (btnHit) {
-      btnHit.addEventListener('pointerdown', (e) => {
+      const handleHitDown = (e) => {
         e.preventDefault();
+        triggerHaptic(18);
+        btnHit.classList.add('active');
         gameEngine.playerHit();
-      });
+      };
+      const handleHitUp = (e) => {
+        e.preventDefault();
+        btnHit.classList.remove('active');
+      };
+
+      btnHit.addEventListener('pointerdown', handleHitDown);
+      btnHit.addEventListener('pointerup', handleHitUp);
+      btnHit.addEventListener('pointerleave', handleHitUp);
+      btnHit.addEventListener('pointercancel', handleHitUp);
+    }
+
+    // ── 左手方向鍵滑動轉向判定 ──
+    if (dpadContainer) {
+      const resetDirs = () => {
+        gameEngine.keys = { up: false, down: false, left: false, right: false };
+        Object.values(dirBtns).forEach(b => b?.classList.remove('active'));
+      };
+
+      const handleTouch = (e) => {
+        e.preventDefault();
+        const touches = e.touches ? Array.from(e.touches) : [e];
+        const newKeys = { up: false, down: false, left: false, right: false };
+
+        touches.forEach(t => {
+          const el = document.elementFromPoint(t.clientX, t.clientY);
+          if (el && el.dataset && el.dataset.dir) {
+            newKeys[el.dataset.dir] = true;
+          }
+        });
+
+        let changed = false;
+        for (const k in newKeys) {
+          if (gameEngine.keys[k] !== newKeys[k]) changed = true;
+          gameEngine.keys[k] = newKeys[k];
+          if (dirBtns[k]) {
+            if (newKeys[k]) dirBtns[k].classList.add('active');
+            else dirBtns[k].classList.remove('active');
+          }
+        }
+        if (changed) triggerHaptic(10);
+      };
+
+      dpadContainer.addEventListener('touchstart', handleTouch, { passive: false });
+      dpadContainer.addEventListener('touchmove', handleTouch, { passive: false });
+      dpadContainer.addEventListener('touchend', (e) => {
+        if (!e.touches || e.touches.length === 0) resetDirs();
+        else handleTouch(e);
+      }, { passive: false });
+      dpadContainer.addEventListener('touchcancel', resetDirs, { passive: false });
+
+      // Pointer / 滑鼠點擊相容
+      for (const dir in dirBtns) {
+        const btn = dirBtns[dir];
+        if (!btn) continue;
+        btn.addEventListener('pointerdown', (e) => {
+          e.preventDefault();
+          triggerHaptic(10);
+          gameEngine.keys[dir] = true;
+          btn.classList.add('active');
+        });
+        btn.addEventListener('pointerup', (e) => {
+          e.preventDefault();
+          gameEngine.keys[dir] = false;
+          btn.classList.remove('active');
+        });
+        btn.addEventListener('pointerleave', (e) => {
+          e.preventDefault();
+          gameEngine.keys[dir] = false;
+          btn.classList.remove('active');
+        });
+      }
     }
 
     // ── 鍵盤監聽 ──

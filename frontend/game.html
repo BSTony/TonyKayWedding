@@ -62,12 +62,12 @@
       top: 14px;
       left: 14px;
       z-index: 40;
-      width: 36px;
-      height: 36px;
+      width: 38px;
+      height: 38px;
       border-radius: 50%;
-      background: rgba(15, 23, 42, 0.7);
+      background: rgba(15, 23, 42, 0.75);
       backdrop-filter: blur(8px);
-      border: 1px solid rgba(255, 255, 255, 0.25);
+      border: 1px solid rgba(255, 255, 255, 0.3);
       color: white;
       font-size: 16px;
       display: flex;
@@ -101,7 +101,7 @@
       border-radius: 8px;
     }
 
-    /* 錦標賽頂部 HUD 標籤 (優雅懸浮，不擋背景字) */
+    /* 錦標賽頂部 HUD 標籤 */
     .tournament-hud {
       position: absolute;
       top: 8px;
@@ -178,71 +178,93 @@
       text-shadow: 0 0 12px rgba(244, 63, 94, 0.9);
     }
 
-    /* 虛擬手把 (半透明控制鍵) */
+    /* ─── 現代手遊級手把佈局 (左手方向 D-pad ＋ 右手大圓攻擊鈕) ─── */
     .controls {
       position: absolute;
-      bottom: 30px; left: 0; width: 100%;
+      bottom: 20px; left: 0; width: 100%;
       display: flex;
       justify-content: space-between;
-      padding: 0 35px;
+      align-items: flex-end;
+      padding: 0 28px;
       z-index: 25;
       pointer-events: none;
       box-sizing: border-box;
     }
 
-    /* 左邊：殺球按鈕 (半透明紅色 A 鍵) */
-    .controls .action {
-      display: flex;
-      align-items: flex-end;
-      pointer-events: auto;
-    }
-    .btn-hit {
-      width: 85px; height: 85px;
-      border-radius: 50%;
-      background: rgba(220, 38, 38, 0.35);
-      border: 2px solid rgba(255, 255, 255, 0.6);
-      color: white;
-      font-size: 24px;
-      font-weight: bold;
-      font-family: 'Press Start 2P', cursive;
-      display: flex;
-      align-items: center;
-      justify-content: center;
-      user-select: none;
-      touch-action: manipulation;
-      box-shadow: 0 6px 16px rgba(0,0,0,0.4);
-    }
-    .btn-hit:active { background: rgba(220, 38, 38, 0.75); }
-
-    /* 右邊：方向鍵 (倒T型排列) */
+    /* 👈 左手：人體工學方向鍵 (支援手指滑動連貫轉向) */
     .controls .dpad {
       display: grid;
-      grid-template-columns: 58px 58px 58px;
-      grid-template-rows: 58px 58px;
-      gap: 8px;
+      grid-template-columns: 62px 62px 62px;
+      grid-template-rows: 62px 62px;
+      gap: 10px;
       pointer-events: auto;
+      touch-action: none;
+      background: rgba(15, 23, 42, 0.45);
+      padding: 8px;
+      border-radius: 24px;
+      backdrop-filter: blur(10px);
+      -webkit-backdrop-filter: blur(10px);
+      border: 1.5px solid rgba(255, 255, 255, 0.2);
+      box-shadow: 0 8px 32px rgba(0, 0, 0, 0.5);
     }
     .btn-dir {
-      background: rgba(255, 255, 255, 0.18);
-      border: 2px solid rgba(255, 255, 255, 0.45);
-      border-radius: 12px;
+      background: radial-gradient(circle, rgba(255, 255, 255, 0.22) 0%, rgba(255, 255, 255, 0.08) 100%);
+      border: 1.5px solid rgba(255, 255, 255, 0.5);
+      border-radius: 16px;
       display: flex;
       align-items: center;
       justify-content: center;
       user-select: none;
-      touch-action: manipulation;
+      touch-action: none;
       color: white;
-      font-size: 22px;
-      box-shadow: 0 4px 12px rgba(0,0,0,0.3);
+      font-size: 24px;
+      box-shadow: 0 4px 12px rgba(0, 0, 0, 0.3), inset 0 1px 1px rgba(255, 255, 255, 0.5);
+      transition: transform 0.08s ease, background 0.08s ease;
     }
-    .btn-dir:active { background: rgba(255, 255, 255, 0.55); }
+    .btn-dir:active, .btn-dir.active {
+      transform: scale(0.88);
+      background: radial-gradient(circle, rgba(56, 189, 248, 0.65) 0%, rgba(14, 165, 233, 0.3) 100%);
+      border-color: #38bdf8;
+      box-shadow: 0 0 18px rgba(56, 189, 248, 0.8);
+    }
 
     #btn-up { grid-column: 2; grid-row: 1; }
     #btn-left { grid-column: 1; grid-row: 2; }
     #btn-down { grid-column: 2; grid-row: 2; }
     #btn-right { grid-column: 3; grid-row: 2; }
 
-    /* 遊戲結果彈跳視窗 (晉級 / 冠軍 / 失敗) */
+    /* 👉 右手：主攻擊大圓鈕 (殺球 / 撲球) */
+    .controls .action {
+      display: flex;
+      align-items: flex-end;
+      pointer-events: auto;
+      touch-action: none;
+    }
+    .btn-hit {
+      width: 96px; height: 96px;
+      border-radius: 50%;
+      background: radial-gradient(circle, rgba(239, 68, 68, 0.65) 0%, rgba(185, 28, 28, 0.4) 100%);
+      border: 3px solid rgba(254, 202, 202, 0.85);
+      color: white;
+      display: flex;
+      flex-direction: column;
+      align-items: center;
+      justify-content: center;
+      user-select: none;
+      touch-action: none;
+      box-shadow: 0 0 24px rgba(239, 68, 68, 0.6), 0 10px 28px rgba(0, 0, 0, 0.6), inset 0 2px 4px rgba(255, 255, 255, 0.6);
+      transition: transform 0.08s ease, box-shadow 0.08s ease;
+      cursor: pointer;
+    }
+    .btn-hit:active, .btn-hit.active {
+      transform: scale(0.86);
+      background: radial-gradient(circle, rgba(248, 113, 113, 0.95) 0%, rgba(220, 38, 38, 0.8) 100%);
+      box-shadow: 0 0 36px rgba(239, 68, 68, 0.9), 0 4px 12px rgba(0,0,0,0.8);
+    }
+    .btn-hit-icon { font-size: 32px; line-height: 1; filter: drop-shadow(0 2px 4px rgba(0,0,0,0.4)); }
+    .btn-hit-text { font-size: 13px; font-weight: 900; letter-spacing: 1px; margin-top: 2px; text-shadow: 0 1px 3px rgba(0,0,0,0.8); }
+
+    /* 遊戲結果彈跳視窗 */
     .modal-overlay {
       position: absolute;
       top: 0; left: 0; width: 100%; height: 100%;
@@ -296,7 +318,6 @@
   </style>
 </head>
 <body>
-  <!-- 遊戲畫面容器 -->
   <div id="screen-game">
     <!-- 直向轉橫向提示 -->
     <div class="rotate-prompt">
@@ -330,21 +351,25 @@
         <div class="badge-score" id="comp-score-vs">0</div>
       </div>
 
-      <!-- 虛擬按鈕 -->
+      <!-- 現代手遊按鈕：左手 D-pad ＋ 右手大圓攻擊鍵 -->
       <div class="controls">
-        <div class="action">
-          <button class="btn-hit" id="btn-hit">A</button>
-        </div>
-        <div class="dpad">
-          <button class="btn-dir" id="btn-up">⬆️</button>
-          <button class="btn-dir" id="btn-left">⬅️</button>
+        <div class="dpad" id="dpad-container">
+          <button class="btn-dir" id="btn-up" data-dir="up">⬆️</button>
+          <button class="btn-left btn-dir" id="btn-left" data-dir="left">⬅️</button>
           <div class="dpad-center"></div>
-          <button class="btn-dir" id="btn-right">➡️</button>
-          <button class="btn-dir" id="btn-down">⬇️</button>
+          <button class="btn-right btn-dir" id="btn-right" data-dir="right">➡️</button>
+          <button class="btn-down btn-dir" id="btn-down" data-dir="down">⬇️</button>
+        </div>
+
+        <div class="action">
+          <button class="btn-hit" id="btn-hit">
+            <span class="btn-hit-icon">⚡</span>
+            <span class="btn-hit-text">殺球</span>
+          </button>
         </div>
       </div>
 
-      <!-- 比賽結果彈窗 (晉級 / 冠軍 / 重試) -->
+      <!-- 比賽結果彈窗 -->
       <div class="modal-overlay" id="match-modal">
         <div class="modal-card">
           <div class="modal-icon" id="modal-icon">🎉</div>
