@@ -805,42 +805,51 @@ function letComputerDecideUserInput(player, ball, theOtherPlayer, userInput) {
   userInput.yDirection = 0;
   userInput.powerHit = 0;
 
+  const boldness = player.computerBoldness || 2;
   const leftBoundary = Number(player.isPlayer2) * GROUND_HALF_WIDTH;
   const rightBoundary = (Number(player.isPlayer2) + 1) * GROUND_HALF_WIDTH;
   const myCourtCenter = leftBoundary + ((GROUND_HALF_WIDTH / 2) | 0);
 
   let targetX = ball.expectedLandingPointX;
 
-  // 若球在對手場內，AI 回防至己方中場
+  // 若球在對手場內，AI 根據強度回防至己方最佳防守位置
   const isBallOnOpponentSide = (ball.x < leftBoundary || ball.x > rightBoundary);
-  if (isBallOnOpponentSide && Math.abs(ball.x - player.x) > 80) {
+  if (isBallOnOpponentSide && Math.abs(ball.x - player.x) > (100 - boldness * 8)) {
     targetX = myCourtCenter;
   }
 
-  // 高精準移動跟隨 (消除遲滯，反應更迅速敏捷)
-  if (Math.abs(targetX - player.x) > 3) {
+  // 走位靈敏度：難度越高，追球死區越小、反應越迅速
+  const deadzone = Math.max(1, Math.floor(9 - boldness * 1.2));
+  if (Math.abs(targetX - player.x) > deadzone) {
     userInput.xDirection = player.x < targetX ? 1 : -1;
   }
 
   if (player.state === 0) {
-    // 地面狀態：起跳時機判斷 (主動起跳攔截或高空扣殺)
-    const isBallApproaching = player.isPlayer2 ? (ball.x > GROUND_HALF_WIDTH - 30) : (ball.x < GROUND_HALF_WIDTH + 30);
+    // 地面狀態：起跳時機判斷 (強度越高，越主動在高空截擊與重扣)
+    const interceptDist = 24 + boldness * 5;
+    const isBallApproaching = player.isPlayer2 ? (ball.x > GROUND_HALF_WIDTH - 40) : (ball.x < GROUND_HALF_WIDTH + 40);
+    
     if (
       isBallApproaching &&
-      Math.abs(ball.x - player.x) < PLAYER_HALF_LENGTH + 12 &&
-      ball.y > 10 &&
-      ball.y < 210 &&
-      ball.yVelocity > -3
+      Math.abs(ball.x - player.x) < interceptDist &&
+      ball.y > (10 + Math.max(0, 5 - boldness) * 10) &&
+      ball.y < (180 + boldness * 8) &&
+      ball.yVelocity > -4
     ) {
-      userInput.yDirection = -1; // 主動起跳
+      // 高難度 AI 100% 主動起跳，低難度 AI 依機率起跳
+      const jumpProb = Math.min(1.0, 0.4 + boldness * 0.12);
+      if (Math.random() < jumpProb) {
+        userInput.yDirection = -1; // 主動起跳
+      }
     }
 
-    // 飛撲救險球 (當球即將落地且步行無法趕上時)
+    // 飛撲救險球 (當球即將落地且步行無法趕上時，強度越高撲球越極限)
+    const diveThreshold = 18 + boldness * 2;
     if (
       ball.expectedLandingPointX > leftBoundary - 10 &&
       ball.expectedLandingPointX < rightBoundary + 10 &&
-      Math.abs(ball.expectedLandingPointX - player.x) > 26 &&
-      ball.y > 125 &&
+      Math.abs(ball.expectedLandingPointX - player.x) > diveThreshold &&
+      ball.y > (110 - boldness * 5) &&
       ball.yVelocity > 0
     ) {
       userInput.powerHit = 1;
@@ -848,16 +857,18 @@ function letComputerDecideUserInput(player, ball, theOtherPlayer, userInput) {
     }
   } else if (player.state === 1 || player.state === 2) {
     // 空中狀態：空中微調與重扣
-    if (Math.abs(ball.x - player.x) > 4) {
+    if (Math.abs(ball.x - player.x) > 3) {
       userInput.xDirection = player.x < ball.x ? 1 : -1;
     }
 
-    if (Math.abs(ball.x - player.x) < 56 && Math.abs(ball.y - player.y) < 56) {
+    const smashHitRange = 46 + boldness * 2;
+    if (Math.abs(ball.x - player.x) < smashHitRange && Math.abs(ball.y - player.y) < smashHitRange) {
       const willInputPowerHit = decideWhetherInputPowerHit(
         player,
         ball,
         theOtherPlayer,
-        userInput
+        userInput,
+        boldness
       );
       if (willInputPowerHit) {
         userInput.powerHit = 1;
@@ -869,29 +880,33 @@ function letComputerDecideUserInput(player, ball, theOtherPlayer, userInput) {
 /**
  * AI 扣殺角度決策：計算 6 種角度中落點距離對手最遠 (最刁鑽) 的攻擊路徑
  */
-function decideWhetherInputPowerHit(player, ball, theOtherPlayer, userInput) {
+function decideWhetherInputPowerHit(player, ball, theOtherPlayer, userInput, boldness = 3) {
   let bestDist = -1;
-  let bestXDir = 1;
+  let bestXDir = player.isPlayer2 ? -1 : 1;
   let bestYDir = 1;
 
   const oppLeftBoundary = (1 - Number(player.isPlayer2)) * GROUND_HALF_WIDTH;
   const oppRightBoundary = oppLeftBoundary + GROUND_HALF_WIDTH;
 
-  for (let xDirection = 1; xDirection >= -1; xDirection--) {
-    for (let yDirection = -1; yDirection <= 1; yDirection++) {
-      const expectedLandingPointX = expectedLandingPointXWhenPowerHit(
-        xDirection,
-        yDirection,
-        ball
-      );
+  // 高難度 AI 計算刁鑽死角；低難度 AI 隨機扣殺
+  const smartSnipeProb = Math.min(1.0, 0.35 + boldness * 0.12);
+  if (Math.random() < smartSnipeProb) {
+    for (let xDirection = 1; xDirection >= -1; xDirection--) {
+      for (let yDirection = -1; yDirection <= 1; yDirection++) {
+        const expectedLandingPointX = expectedLandingPointXWhenPowerHit(
+          xDirection,
+          yDirection,
+          ball
+        );
 
-      // 檢查是否落在對手場內
-      if (expectedLandingPointX >= oppLeftBoundary && expectedLandingPointX <= oppRightBoundary) {
-        const dist = Math.abs(expectedLandingPointX - theOtherPlayer.x);
-        if (dist > bestDist) {
-          bestDist = dist;
-          bestXDir = xDirection;
-          bestYDir = yDirection;
+        // 檢查是否落在對手場內
+        if (expectedLandingPointX >= oppLeftBoundary && expectedLandingPointX <= oppRightBoundary) {
+          const dist = Math.abs(expectedLandingPointX - theOtherPlayer.x);
+          if (dist > bestDist) {
+            bestDist = dist;
+            bestXDir = xDirection;
+            bestYDir = yDirection;
+          }
         }
       }
     }

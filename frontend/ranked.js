@@ -196,17 +196,57 @@ function pairWithRealOpponent(opponent) {
   }, 1200);
 }
 
+// 根據玩家積分，動態獲取匹配的天梯 AI 對手與強度等級 (強度隨積分直線成長)
+function getDynamicAIContender(pts) {
+  if (pts <= 10) {
+    // 🥉 青銅新手段位 (0~10 pts)：新手伴郎伴娘
+    const contenders = [
+      { name: '👦 伴郎小明', avatar: '🏸', offset: -1, boldness: 2 },
+      { name: '👧 伴娘小芬', avatar: '🌸', offset: 0, boldness: 2 }
+    ];
+    return contenders[Math.floor(Math.random() * contenders.length)];
+  } else if (pts <= 25) {
+    // 🥈 白銀羽球手段位 (11~25 pts)：走位敏捷，主動起跳攔截
+    const contenders = [
+      { name: '👦 伴郎阿豪', avatar: '⚡', offset: 2, boldness: 3 },
+      { name: '👧 伴娘萱萱', avatar: '🦋', offset: -2, boldness: 4 }
+    ];
+    return contenders[Math.floor(Math.random() * contenders.length)];
+  } else if (pts <= 50) {
+    // 🥇 黃金高手段位 (26~50 pts)：超強飛撲救險球，對角扣殺
+    const contenders = [
+      { name: '👦 伴郎俊傑 (校隊)', avatar: '🔥', offset: 4, boldness: 5 },
+      { name: '👧 伴娘雅婷 (殺球狂)', avatar: '🎯', offset: 3, boldness: 5 }
+    ];
+    return contenders[Math.floor(Math.random() * contenders.length)];
+  } else if (pts <= 90) {
+    // 💎 鑽石大師段位 (51~90 pts)：極速預判落點，高空壓制
+    const contenders = [
+      { name: '👦 伴郎總召 (省港球王)', avatar: '⚡', offset: 6, boldness: 6 },
+      { name: '👰 伴娘團長 (殺手級)', avatar: '🌸', offset: 5, boldness: 6 }
+    ];
+    return contenders[Math.floor(Math.random() * contenders.length)];
+  } else {
+    // 👑 傳奇球王段位 (90+ pts)：神級新娘 KAY，零失誤預判與極限暴扣
+    const contenders = [
+      { name: '👰 新娘 KAY 👑 (終極神級)', avatar: '👑', offset: 8, boldness: 7 },
+      { name: '⚡ 羽球之神 (殿堂級)', avatar: '🔥', offset: 10, boldness: 7 }
+    ];
+    return contenders[Math.floor(Math.random() * contenders.length)];
+  }
+}
+
 // 配對到天梯挑戰者 (AI)
 function pairWithAIContender() {
   if (countdownTimer) clearInterval(countdownTimer);
-  const randContender = RANKED_CONTENDERS[Math.floor(Math.random() * RANKED_CONTENDERS.length)];
-  const oppPoints = Math.max(0, myPoints + randContender.ptsOffset);
+  const contender = getDynamicAIContender(myPoints);
+  const oppPoints = Math.max(0, myPoints + contender.offset);
 
   currentOpponent = {
-    name: randContender.name,
-    avatar: randContender.avatar,
+    name: contender.name,
+    avatar: contender.avatar,
     points: oppPoints,
-    boldness: randContender.boldness
+    boldness: contender.boldness
   };
 
   oppAvatarEl.textContent = currentOpponent.avatar;
@@ -214,7 +254,7 @@ function pairWithAIContender() {
   oppNameEl.style.color = 'var(--text-primary)';
   oppPtsEl.textContent = currentOpponent.points + ' pts';
 
-  matchStatusText.textContent = `🎯 配對到天梯高手【${currentOpponent.name}】！`;
+  matchStatusText.textContent = `🎯 配對到天梯高手【${currentOpponent.name}】！(難度 LV.${contender.boldness})`;
 
   setTimeout(() => {
     enterArenaMatch();
