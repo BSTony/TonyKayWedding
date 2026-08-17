@@ -211,83 +211,45 @@
       }
     }
 
-    /* ─── 圓盤虛擬搖桿 (Joystick Disc) ─── */
-    .controls .joystick-disc {
-      position: relative;
-      width: clamp(125px, 34vw, 155px);
-      height: clamp(125px, 34vw, 155px);
-      max-width: 165px;
-      max-height: 165px;
-      border-radius: 50%;
-      background: radial-gradient(circle, rgba(30, 41, 59, 0.75) 0%, rgba(15, 23, 42, 0.92) 100%);
-      border: 2px solid rgba(255, 255, 255, 0.4);
-      box-shadow: 0 8px 32px rgba(0, 0, 0, 0.65), inset 0 0 20px rgba(56, 189, 248, 0.2);
-      backdrop-filter: blur(12px);
-      -webkit-backdrop-filter: blur(12px);
-      display: flex;
-      align-items: center;
-      justify-content: center;
+    /* ─── 十字方向鍵 D-Pad ─── */
+    .dpad {
+      display: grid;
+      grid-template-columns: 1fr 1fr 1fr;
+      grid-template-rows: 1fr 1fr 1fr;
+      width: clamp(120px, 32vw, 150px);
+      height: clamp(120px, 32vw, 150px);
+      gap: 3px;
+      pointer-events: auto;
       touch-action: none;
       user-select: none;
-      pointer-events: auto;
     }
-
-    .joystick-arrows {
-      position: absolute;
-      width: 100%; height: 100%;
-      pointer-events: none;
-    }
-    .j-arrow {
-      position: absolute;
-      font-size: 13px;
-      font-weight: 900;
-      color: rgba(255, 255, 255, 0.4);
-      text-shadow: 0 0 6px rgba(56, 189, 248, 0.4);
-      transition: color 0.08s, transform 0.08s;
-    }
-    .j-arrow.active {
-      color: #38bdf8;
-      text-shadow: 0 0 14px #38bdf8;
-      transform: scale(1.25);
-    }
-    .j-up    { top: 8px; left: 50%; transform: translateX(-50%); }
-    .j-down  { bottom: 8px; left: 50%; transform: translateX(-50%); }
-    .j-left  { left: 8px; top: 50%; transform: translateY(-50%); }
-    .j-right { right: 8px; top: 50%; transform: translateY(-50%); }
-
-    /* 八向微光引導圈 */
-    .joystick-crosshair {
-      position: absolute;
-      width: 62%; height: 62%;
-      border-radius: 50%;
-      border: 1.5px dashed rgba(255, 255, 255, 0.18);
-      pointer-events: none;
-    }
-
-    /* 搖桿推桿中心圓鈕 */
-    .joystick-knob {
-      width: clamp(52px, 14vw, 62px);
-      height: clamp(52px, 14vw, 62px);
-      border-radius: 50%;
-      background: radial-gradient(circle, #38bdf8 0%, #0284c7 65%, #0369a1 100%);
-      border: 2.5px solid rgba(255, 255, 255, 0.9);
-      box-shadow: 0 4px 18px rgba(2, 132, 199, 0.7), inset 0 2px 4px rgba(255, 255, 255, 0.8);
-      pointer-events: none;
-      transform: translate(0px, 0px);
-      transition: transform 0.04s ease-out;
+    .dpad-btn {
       display: flex;
       align-items: center;
       justify-content: center;
+      background: rgba(30, 41, 59, 0.82);
+      border: 1.5px solid rgba(255, 255, 255, 0.25);
+      border-radius: 8px;
+      color: rgba(255,255,255,0.75);
+      font-size: clamp(16px, 5vw, 22px);
+      cursor: pointer;
+      transition: background 0.07s, transform 0.07s;
+      touch-action: none;
+      backdrop-filter: blur(8px);
+      -webkit-backdrop-filter: blur(8px);
     }
-    .joystick-knob::after {
-      content: '';
-      width: 18px; height: 18px;
-      border-radius: 50%;
-      background: rgba(255, 255, 255, 0.9);
-      box-shadow: 0 0 10px rgba(255, 255, 255, 0.95);
+    .dpad-btn:active, .dpad-btn.active {
+      background: rgba(56, 189, 248, 0.45);
+      border-color: #38bdf8;
+      color: #fff;
+      transform: scale(0.9);
+      box-shadow: 0 0 12px rgba(56,189,248,0.6);
     }
-    .joystick-knob.active {
-      box-shadow: 0 0 26px rgba(56, 189, 248, 0.95), inset 0 2px 6px rgba(255, 255, 255, 0.95);
+    .dpad-center {
+      background: rgba(15, 23, 42, 0.5);
+      border: none;
+      border-radius: 8px;
+      pointer-events: none;
     }
 
     /* ─── 右手雙按鈕群組 (跳躍 Jump ＋ 殺球 Hit) ─── */
@@ -570,17 +532,21 @@
         <div class="badge-score" id="arena-p2-score">0</div>
       </div>
 
-      <!-- 手遊八向圓盤手把 (左手 360° 圓盤搖桿 ＋ 右手攻擊圓鈕) -->
+      <!-- 十字方向鍵 D-Pad -->
       <div class="controls">
-        <div class="joystick-disc" id="joystick-disc">
-          <div class="joystick-arrows">
-            <span class="j-arrow j-up" id="j-up">▲</span>
-            <span class="j-arrow j-right" id="j-right">►</span>
-            <span class="j-arrow j-down" id="j-down">▼</span>
-            <span class="j-arrow j-left" id="j-left">◄</span>
-          </div>
-          <div class="joystick-crosshair"></div>
-          <div class="joystick-knob" id="joystick-knob"></div>
+        <div class="dpad" id="dpad">
+          <!-- 上排 -->
+          <div></div>
+          <button class="dpad-btn" id="dpad-up" aria-label="上">▲</button>
+          <div></div>
+          <!-- 中排 -->
+          <button class="dpad-btn" id="dpad-left" aria-label="左">◀</button>
+          <div class="dpad-center"></div>
+          <button class="dpad-btn" id="dpad-right" aria-label="右">▶</button>
+          <!-- 下排 -->
+          <div></div>
+          <button class="dpad-btn" id="dpad-down" aria-label="下">▼</button>
+          <div></div>
         </div>
 
         <div class="action">

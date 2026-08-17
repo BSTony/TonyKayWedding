@@ -355,12 +355,46 @@ function enterArenaMatch() {
       set(ref(db, 'rankedRooms/' + currentRoomId + '/' + inputKey), input).catch(() => {});
     }, 5);
 
+    let serverStateReceived = false;
     onValue(ref(db, 'rankedRooms/' + currentRoomId + '/state'), (snap) => {
       const state = snap.val();
       if (state && gameEngine) {
+        serverStateReceived = true;
         gameEngine.receiveRemoteState(state);
       }
     });
+
+    // 備援：若 3 秒內沒收到伺服器廣播， P1 自動接手物理計算（伺服器未啟動時備用）
+    if (isHostPlayer) {
+      setTimeout(() => {
+        if (!serverStateReceived && gameEngine && !matchEnded) {
+          console.warn('備援：伺服器未回應， P1 自動接手權威物理計算');
+          // 切換為 Host 模式
+          gameEngine.stop();
+          gameEngine = new BadmintonEngine('game-canvas');
+          bindMobileControls();
+          gameEngine.onScoreUpdate = (p1Score, p2Score) => {
+            arenaP1Score.textContent = p1Score;
+            arenaP2Score.textContent = p2Score;
+          };
+          gameEngine.onGameOver = (playerWon) => {
+            matchEnded = true;
+            handleRankedGameOver(playerWon);
+          };
+          gameEngine.startMultiplayer('host', 5, null, (state) => {
+            set(ref(db, 'rankedRooms/' + currentRoomId + '/state'), state).catch(() => {});
+          });
+          onValue(ref(db, 'rankedRooms/' + currentRoomId + '/p2Input'), (snap) => {
+            const input = snap.val();
+            if (input && gameEngine) gameEngine.setRemoteGuestInput(input);
+          });
+          onValue(ref(db, 'rankedRooms/' + currentRoomId + '/guestInput'), (snap) => {
+            const input = snap.val();
+            if (input && gameEngine) gameEngine.setRemoteGuestInput(input);
+          });
+        }
+      }, 3000);
+    }
   } else {
     // 單人練習 / AI 對戰模式
     gameEngine.start(5, currentOpponent.boldness || 3);
@@ -411,16 +445,14 @@ document.getElementById('btn-exit-arena').addEventListener('click', () => {
   window.location.href = './lobby.html';
 });
 
-// 手遊控制綁定 (左手 360° 圓盤虛擬搖桿 ＋ 右手【跳躍 Jump】＋【殺球 Hit】雙鍵)
+// 手遊控制綁定 (十字方向鍵 D-Pad ＋ 右手「跳躍 Jump」＋「殺球 Hit」)
 function bindMobileControls() {
-  const disc = document.getElementById('joystick-disc');
-  const knob = document.getElementById('joystick-knob');
   const btnJump = document.getElementById('btn-jump');
-  const btnHit = document.getElementById('btn-hit');
-  const arrowUp = document.getElementById('j-up');
-  const arrowDown = document.getElementById('j-down');
-  const arrowLeft = document.getElementById('j-left');
-  const arrowRight = document.getElementById('j-right');
+  const btnHit  = document.getElementById('btn-hit');
+  const dpadUp    = document.getElementById('dpad-up');
+  const dpadDown  = document.getElementById('dpad-down');
+  const dpadLeft  = document.getElementById('dpad-left');
+  const dpadRight = document.getElementById('dpad-right');
 
   const triggerHaptic = (ms = 12) => {
     if (typeof navigator !== 'undefined' && navigator.vibrate) {
@@ -428,149 +460,77 @@ function bindMobileControls() {
     }
   };
 
-  // ── 右手按鈕 1：【跳躍 Jump】🚀 ──
+  // 建立方向鍵綁定工即函式 (pointerdown + touchstart 雙保安)
+  const bindDpad = (btn, key) => {
+    if (!btn) return;
+    const down = (e) => {
+      e.preventDefault();
+      btn.classList.add('active');
+      triggerHaptic(10);
+      if (gameEngine) gameEngine.keys[key] = true;
+    };
+    const up = (e) => {
+      e.preventDefault();
+      btn.classList.remove('active');
+      if (gameEngine) gameEngine.keys[key] = false;
+    };
+    btn.addEventListener('pointerdown', down);
+    btn.addEventListener('pointerup', up);
+    btn.addEventListener('pointerleave', up);
+    btn.addEventListener('pointercancel', up);
+    btn.addEventListener('touchstart', down, { passive: false });
+    btn.addEventListener('touchend', up, { passive: false });
+    btn.addEventListener('touchcancel', up, { passive: false });
+  };
+
+  bindDpad(dpadUp,    'up');
+  bindDpad(dpadDown,  'down');
+  bindDpad(dpadLeft,  'left');
+  bindDpad(dpadRight, 'right');
+
+  // 右手按鈕 1：「跳躍 Jump」
   if (btnJump) {
-    const handleJumpDown = (e) => {
+    const down = (e) => {
       e.preventDefault();
       triggerHaptic(12);
       btnJump.classList.add('active');
       if (gameEngine) gameEngine.keys.up = true;
     };
-    const handleJumpUp = (e) => {
+    const up = (e) => {
       e.preventDefault();
       btnJump.classList.remove('active');
       if (gameEngine) gameEngine.keys.up = false;
     };
-
-    btnJump.addEventListener('pointerdown', handleJumpDown);
-    btnJump.addEventListener('pointerup', handleJumpUp);
-    btnJump.addEventListener('pointerleave', handleJumpUp);
-    btnJump.addEventListener('pointercancel', handleJumpUp);
+    btnJump.addEventListener('pointerdown', down);
+    btnJump.addEventListener('pointerup', up);
+    btnJump.addEventListener('pointerleave', up);
+    btnJump.addEventListener('pointercancel', up);
+    btnJump.addEventListener('touchstart', down, { passive: false });
+    btnJump.addEventListener('touchend', up, { passive: false });
+    btnJump.addEventListener('touchcancel', up, { passive: false });
   }
 
-  // ── 右手按鈕 2：【殺球 / 擊球 Hit】⚡ ──
+  // 右手按鈕 2：「殺球 Hit」
   if (btnHit) {
-    const handleHitDown = (e) => {
+    const down = (e) => {
       e.preventDefault();
       triggerHaptic(18);
       btnHit.classList.add('active');
       if (gameEngine) gameEngine.playerHit();
     };
-    const handleHitUp = (e) => {
+    const up = (e) => {
       e.preventDefault();
       btnHit.classList.remove('active');
     };
-
-    btnHit.addEventListener('pointerdown', handleHitDown);
-    btnHit.addEventListener('pointerup', handleHitUp);
-    btnHit.addEventListener('pointerleave', handleHitUp);
-    btnHit.addEventListener('pointercancel', handleHitUp);
+    btnHit.addEventListener('pointerdown', down);
+    btnHit.addEventListener('pointerup', up);
+    btnHit.addEventListener('pointerleave', up);
+    btnHit.addEventListener('pointercancel', up);
+    btnHit.addEventListener('touchstart', down, { passive: false });
+    btnHit.addEventListener('touchend', up, { passive: false });
+    btnHit.addEventListener('touchcancel', up, { passive: false });
   }
 
-  // ── 左手 360° 八向圓盤虛擬搖桿 (順滑打出撲球、斜向組合鍵) ──
-  if (disc && knob) {
-    let isDragging = false;
-    let discRect = null;
-    const MAX_RADIUS = 36;
-    const DEAD_ZONE = 8;
-
-    const resetJoystick = () => {
-      isDragging = false;
-      knob.style.transform = 'translate(0px, 0px)';
-      knob.classList.remove('active');
-      if (arrowUp) arrowUp.classList.remove('active');
-      if (arrowDown) arrowDown.classList.remove('active');
-      if (arrowLeft) arrowLeft.classList.remove('active');
-      if (arrowRight) arrowRight.classList.remove('active');
-      if (gameEngine) {
-        // 保留可能由 Jump 按鈕按下的 up
-        const isJumping = btnJump ? btnJump.classList.contains('active') : false;
-        gameEngine.keys.left = false;
-        gameEngine.keys.right = false;
-        gameEngine.keys.down = false;
-        if (!isJumping) gameEngine.keys.up = false;
-      }
-    };
-
-    const updateJoystick = (clientX, clientY) => {
-      if (!discRect) discRect = disc.getBoundingClientRect();
-      const centerX = discRect.left + discRect.width / 2;
-      const centerY = discRect.top + discRect.height / 2;
-
-      let dx = clientX - centerX;
-      let dy = clientY - centerY;
-      const dist = Math.sqrt(dx * dx + dy * dy);
-
-      if (dist > MAX_RADIUS) {
-        dx = (dx / dist) * MAX_RADIUS;
-        dy = (dy / dist) * MAX_RADIUS;
-      }
-
-      knob.style.transform = `translate(${dx}px, ${dy}px)`;
-      knob.classList.add('active');
-
-      const isJumping = btnJump ? btnJump.classList.contains('active') : false;
-      const keys = { up: isJumping, down: false, left: false, right: false };
-
-      if (dist > DEAD_ZONE) {
-        if (dy < -DEAD_ZONE * 0.75) keys.up = true;
-        if (dy > DEAD_ZONE * 0.75) keys.down = true;
-        if (dx < -DEAD_ZONE * 0.75) keys.left = true;
-        if (dx > DEAD_ZONE * 0.75) keys.right = true;
-      }
-
-      if (arrowUp) arrowUp.classList.toggle('active', keys.up);
-      if (arrowDown) arrowDown.classList.toggle('active', keys.down);
-      if (arrowLeft) arrowLeft.classList.toggle('active', keys.left);
-      if (arrowRight) arrowRight.classList.toggle('active', keys.right);
-
-      if (gameEngine) {
-        gameEngine.keys.up = keys.up;
-        gameEngine.keys.down = keys.down;
-        gameEngine.keys.left = keys.left;
-        gameEngine.keys.right = keys.right;
-      }
-    };
-
-    const handlePointerDown = (e) => {
-      e.preventDefault();
-      isDragging = true;
-      discRect = disc.getBoundingClientRect();
-      triggerHaptic(10);
-      updateJoystick(e.clientX, e.clientY);
-    };
-
-    const handlePointerMove = (e) => {
-      if (!isDragging) return;
-      e.preventDefault();
-      updateJoystick(e.clientX, e.clientY);
-    };
-
-    const handleTouchStart = (e) => {
-      e.preventDefault();
-      isDragging = true;
-      discRect = disc.getBoundingClientRect();
-      const t = e.touches[0];
-      if (t) updateJoystick(t.clientX, t.clientY);
-    };
-
-    const handleTouchMove = (e) => {
-      if (!isDragging) return;
-      e.preventDefault();
-      const t = e.touches[0];
-      if (t) updateJoystick(t.clientX, t.clientY);
-    };
-
-    disc.addEventListener('pointerdown', handlePointerDown);
-    window.addEventListener('pointermove', handlePointerMove);
-    window.addEventListener('pointerup', resetJoystick);
-    window.addEventListener('pointercancel', resetJoystick);
-
-    disc.addEventListener('touchstart', handleTouchStart, { passive: false });
-    window.addEventListener('touchmove', handleTouchMove, { passive: false });
-    window.addEventListener('touchend', resetJoystick, { passive: false });
-    window.addEventListener('touchcancel', resetJoystick, { passive: false });
-  }
 
   // 鍵盤支援
   const KEY_MAP = {
