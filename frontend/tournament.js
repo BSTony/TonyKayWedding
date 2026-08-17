@@ -45,12 +45,12 @@ const arenaModalTitle = document.getElementById('arena-modal-title');
 const arenaModalDesc = document.getElementById('arena-modal-desc');
 const arenaModalBtn = document.getElementById('arena-modal-btn');
 
-// 預設伴郎伴娘名冊 (以段位命名)
+// 預設電腦選手名冊 (純段位命名)
 const AI_NAMES = [
-  '🥉【青銅初階】伴郎小明', '🥉【青銅先鋒】伴娘小芬',
-  '🥈【白銀好手】伴郎阿豪', '🥈【白銀菁英】伴娘萱萱',
-  '🥇【黃金專家】伴郎俊傑', '🥇【黃金大師】伴娘雅婷',
-  '💎【璀璨鑽石】伴郎總召', '👑【最強王者】新娘 KAY'
+  '🥉【青銅初階】AI', '🥉【青銅先鋒】AI',
+  '🥈【白銀好手】AI', '🥈【白銀菁英】AI',
+  '🥇【黃金專家】AI', '🥇【黃金大師】AI',
+  '💎【璀璨鑽石】AI', '👑【最強王者】新娘 KAY'
 ];
 
 // Firebase 錦標賽房間節點
@@ -178,7 +178,7 @@ btnShuffle.addEventListener('click', () => {
   update(roomRef, { slots: newSlots, updatedAt: Date.now() });
 });
 
-// 一鍵補滿伴郎伴娘 AI
+// 一鍵補滿電腦 AI
 btnFillAi.addEventListener('click', () => {
   if (!currentRoomData) return;
   const slots = currentRoomData.slots ? [...currentRoomData.slots] : [null, null, null, null];
@@ -212,7 +212,7 @@ btnStart.addEventListener('click', () => {
   if (!currentRoomData || !currentRoomData.slots) return;
   const occupied = currentRoomData.slots.filter(Boolean);
   if (occupied.length < 4) {
-    alert('需要滿 4 位選手才能開始錦標賽！請點擊「一鍵補滿伴郎伴娘 AI」或等待朋友加入。');
+    alert('需要滿 4 位選手才能開始錦標賽！請點擊「一鍵補滿電腦 AI」或等待朋友加入。');
     return;
   }
 

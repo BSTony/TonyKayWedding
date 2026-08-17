@@ -52,12 +52,11 @@ myPtsEl.textContent = myPoints + ' pts';
 
 // 天梯候選對手池 (包含各個積分段位的對手)
 const RANKED_CONTENDERS = [
-  { name: '👦 伴郎大明', avatar: '🏸', ptsOffset: -5, boldness: 2 },
-  { name: '👧 伴娘小雅', avatar: '🌸', ptsOffset: 0, boldness: 3 },
-  { name: '👦 伴郎阿豪', avatar: '⚡', ptsOffset: +4, boldness: 4 },
-  { name: '👧 伴娘萱萱', avatar: '🦋', ptsOffset: -2, boldness: 3 },
-  { name: '👦 伴郎俊傑', avatar: '🔥', ptsOffset: +6, boldness: 5 },
-  { name: '👰 新娘 KAY 👑', avatar: '👑', ptsOffset: +10, boldness: 6 }
+  { name: '🥉【青銅初階】AI', avatar: '🥉', ptsOffset: -5, boldness: 2 },
+  { name: '🥈【白銀好手】AI', avatar: '🥈', ptsOffset: 0, boldness: 3 },
+  { name: '🥇【黃金專家】AI', avatar: '🥇', ptsOffset: +4, boldness: 4 },
+  { name: '💎【璀璨鑽石】AI', avatar: '💎', ptsOffset: +6, boldness: 5 },
+  { name: '👑【最強王者】新娘 KAY', avatar: '👑', ptsOffset: +10, boldness: 6 }
 ];
 
 let queueRef = null;
@@ -196,41 +195,41 @@ function pairWithRealOpponent(opponent) {
   }, 1200);
 }
 
-// 根據玩家積分，動態獲取匹配的天梯 AI 對手與強度等級 (以段位命名)
+// 根據玩家積分，動態獲取匹配的天梯 AI 對手與強度等級 (純段位命名)
 function getDynamicAIContender(pts) {
   if (pts <= 10) {
     // 🥉 青銅新手段位 (0~10 pts)
     const contenders = [
-      { name: '🥉【青銅初階】伴郎小明', avatar: '🥉', offset: -1, boldness: 2 },
-      { name: '🥉【青銅先鋒】伴娘小芬', avatar: '🌸', offset: 0, boldness: 2 }
+      { name: '🥉【青銅初階】AI', avatar: '🥉', offset: -1, boldness: 2 },
+      { name: '🥉【青銅先鋒】AI', avatar: '🥉', offset: 0, boldness: 2 }
     ];
     return contenders[Math.floor(Math.random() * contenders.length)];
   } else if (pts <= 25) {
     // 🥈 白銀好手段位 (11~25 pts)
     const contenders = [
-      { name: '🥈【白銀好手】伴郎阿豪', avatar: '🥈', offset: 2, boldness: 3 },
-      { name: '🥈【白銀菁英】伴娘萱萱', avatar: '🦋', offset: -2, boldness: 4 }
+      { name: '🥈【白銀好手】AI', avatar: '🥈', offset: 2, boldness: 3 },
+      { name: '🥈【白銀菁英】AI', avatar: '🥈', offset: -2, boldness: 4 }
     ];
     return contenders[Math.floor(Math.random() * contenders.length)];
   } else if (pts <= 50) {
     // 🥇 黃金大師段位 (26~50 pts)
     const contenders = [
-      { name: '🥇【黃金專家】伴郎俊傑', avatar: '🥇', offset: 4, boldness: 5 },
-      { name: '🥇【黃金大師】伴娘雅婷', avatar: '🎯', offset: 3, boldness: 5 }
+      { name: '🥇【黃金專家】AI', avatar: '🥇', offset: 4, boldness: 5 },
+      { name: '🥇【黃金大師】AI', avatar: '🥇', offset: 3, boldness: 5 }
     ];
     return contenders[Math.floor(Math.random() * contenders.length)];
   } else if (pts <= 90) {
     // 💎 璀璨鑽石段位 (51~90 pts)
     const contenders = [
-      { name: '💎【璀璨鑽石】伴郎總召', avatar: '💎', offset: 6, boldness: 6 },
-      { name: '💎【星耀宗師】伴娘團長', avatar: '✨', offset: 5, boldness: 6 }
+      { name: '💎【璀璨鑽石】AI', avatar: '💎', offset: 6, boldness: 6 },
+      { name: '💎【星耀宗師】AI', avatar: '💎', offset: 5, boldness: 6 }
     ];
     return contenders[Math.floor(Math.random() * contenders.length)];
   } else {
     // 👑 最強王者 / 殿堂傳奇 (90+ pts)
     const contenders = [
       { name: '👑【最強王者】新娘 KAY', avatar: '👑', offset: 8, boldness: 7 },
-      { name: '🏆【神話傳奇】伴郎球神', avatar: '🏆', offset: 10, boldness: 7 }
+      { name: '🏆【神話傳奇】巔峰 AI', avatar: '🏆', offset: 10, boldness: 7 }
     ];
     return contenders[Math.floor(Math.random() * contenders.length)];
   }

@@ -44,7 +44,7 @@ playerNameBadge.textContent = '👦 ' + nickname;
 const TOURNAMENT_ROUNDS = [
   {
     stageName: '第一輪 · 八強晉級賽',
-    opponentName: '🥉【青銅初階】伴郎皮卡丘',
+    opponentName: '🥉【青銅初階】AI',
     targetScore: 5,
     boldness: 1,
     rewardPoints: 50,
@@ -52,7 +52,7 @@ const TOURNAMENT_ROUNDS = [
   },
   {
     stageName: '第二輪 · 四強準決賽',
-    opponentName: '🥇【黃金大師】伴娘皮卡丘',
+    opponentName: '🥇【黃金大師】AI',
     targetScore: 5,
     boldness: 3,
     rewardPoints: 100,
