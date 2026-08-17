@@ -1,7 +1,15 @@
 import { defineConfig } from 'vite';
 import { resolve } from 'path';
 
+const now = new Date();
+const buildTime = now.toLocaleDateString('zh-TW', { timeZone: 'Asia/Taipei' }) + ' ' + 
+  now.toLocaleTimeString('zh-TW', { timeZone: 'Asia/Taipei', hour: '2-digit', minute: '2-digit' });
+
 export default defineConfig({
+  define: {
+    __APP_VERSION__: JSON.stringify('v2.1.0'),
+    __BUILD_TIME__: JSON.stringify(buildTime)
+  },
   build: {
     rollupOptions: {
       input: {

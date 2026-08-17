@@ -1,4 +1,5 @@
-import { db, ref, onValue, set, get, update, remove, increment } from './firebase.js';
+import './version.js';
+import { db, ref, onValue, set, get, update, remove, increment, onDisconnect } from './firebase.js';
 import { BadmintonEngine } from './badmintonEngine.js';
 import { calculateRankedPoints } from './rankedScore.js';
 
