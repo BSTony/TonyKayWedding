@@ -50,16 +50,29 @@ export class BadmintonEngine {
         this.spriteLoaded = true;
       });
 
+    // 載入婚禮背景圖
+    this.bgImg = new Image();
+    this.bgImg.src = './wedding_bg.jpg';
+    this.bgLoaded = false;
+    this.bgImg.onload = () => {
+      this.bgLoaded = true;
+    };
+
+    // 浪漫婚禮漂浮花瓣粒子系統 (粉紅/白玫瑰花瓣)
+    this.petals = Array.from({ length: 20 }, () => ({
+      x: Math.random() * 432,
+      y: Math.random() * 248,
+      size: 2.5 + Math.random() * 3.5,
+      speedX: 0.3 + Math.random() * 0.5,
+      speedY: 0.35 + Math.random() * 0.55,
+      rot: Math.random() * Math.PI * 2,
+      rotSpeed: (Math.random() - 0.5) * 0.04,
+      color: Math.random() > 0.4 ? 'rgba(255, 182, 193, 0.75)' : 'rgba(255, 240, 245, 0.85)'
+    }));
+
     // 原版約 30 FPS
     this.lastFrameTime = 0;
     this.fpsInterval = 1000 / 30;
-
-    // 動態雲朵
-    this.clouds = [
-      { x: 40, y: 38, speed: 0.3 },
-      { x: 160, y: 20, speed: 0.2 },
-      { x: 300, y: 50, speed: 0.4 },
-    ];
 
     // 回呼
     this.onScoreUpdate = null;
@@ -233,24 +246,42 @@ export class BadmintonEngine {
 
     const ctx = this.ctx;
 
-    // ── 1. 天空背景 ──
-    ctx.fillStyle = '#70b8e8';
-    ctx.fillRect(0, 0, 432, 188);
-
-    // ── 2. 動態雲朵 ──
-    for (const c of this.clouds) {
-      c.x = (c.x + c.speed) % 480;
-      this.drawSprite('objects/cloud.png', c.x - 48, c.y);
+    // ── 1. 浪漫婚禮花園背景 ──
+    if (this.bgLoaded) {
+      // 繪製婚禮背景圖
+      ctx.drawImage(this.bgImg, 0, 0, 432, 248);
+    } else {
+      ctx.fillStyle = '#70b8e8';
+      ctx.fillRect(0, 0, 432, 248);
     }
 
-    // ── 3. 山脈 (y=188) ──
-    this.drawSprite('objects/mountain.png', 0, 188);
+    // ── 2. 浪漫玫瑰花瓣隨風飄落 ──
+    for (const p of this.petals) {
+      p.x += p.speedX;
+      p.y += p.speedY;
+      p.rot += p.rotSpeed;
+      if (p.y > 248) {
+        p.y = -8;
+        p.x = Math.random() * 432;
+      }
+      if (p.x > 432) {
+        p.x = -8;
+      }
+      ctx.save();
+      ctx.translate(p.x, p.y);
+      ctx.rotate(p.rot);
+      ctx.fillStyle = p.color;
+      ctx.beginPath();
+      ctx.ellipse(0, 0, p.size, p.size * 0.65, 0, 0, Math.PI * 2);
+      ctx.fill();
+      ctx.restore();
+    }
 
-    // ── 4. 地板 (ground_red y=248, ground_yellow y=264) ──
+    // ── 3. 地板 (沙灘球場 / 婚禮草地球場) ──
     this.drawTiledSprite('objects/ground_red.png',    0, 248, 432, 16);
     this.drawTiledSprite('objects/ground_yellow.png', 0, 264, 432, 40);
 
-    // ── 5. 網柱 ──
+    // ── 4. 網柱 ──
     const netX = 216 - 4; // 網柱寬 8px，中心對齊 216
     this.drawTiledSprite('objects/net_pillar_top.png', netX, 176, 8, 8);
     this.drawTiledSprite('objects/net_pillar.png',     netX, 184, 8, 64);
