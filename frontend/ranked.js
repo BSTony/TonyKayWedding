@@ -1,4 +1,4 @@
-import { db, ref, onValue, update, increment } from './firebase.js';
+import { db, ref, onValue, set, get, update, remove, increment } from './firebase.js';
 import { BadmintonEngine } from './badmintonEngine.js';
 import { calculateRankedPoints } from './rankedScore.js';
 
@@ -44,7 +44,7 @@ const modalDesc = document.getElementById('modal-desc');
 const modalBtnNext = document.getElementById('modal-btn-next');
 
 // 初始化自身資料
-const EMOJIS = ['🏸', '👑', '⚡', '🌸', '🦋', '🎯', '🔥', '🌟', '💪', '🐼'];
+const EMOJIS = ['🏆', '👑', '⚡', '🌸', '🦋', '🎯', '🔥', '🌟', '💪', '🐼'];
 const code = nickname.charCodeAt(0) || 0;
 myAvatarEl.textContent = EMOJIS[code % EMOJIS.length];
 myNameEl.textContent = nickname;
@@ -61,22 +61,28 @@ const RANKED_CONTENDERS = [
 
 let queueRef = null;
 let matchFound = false;
-let countdownTimer = null;
-let remainingSeconds = 30;
+let elapsedTimer = null;
+let elapsedSeconds = 0;
 
-// 啟動排位配對 (優先配對線上真人，超時則配對天梯高手)
+function formatTime(sec) {
+  const m = String(Math.floor(sec / 60)).padStart(2, '0');
+  const s = String(sec % 60).padStart(2, '0');
+  return `${m}:${s}`;
+}
+
+// 啟動排位配對 (優先配對線上真人，計時增加)
 function startMatchmaking() {
   matchingView.style.display = 'block';
   arenaView.style.display = 'none';
   matchModal.style.display = 'none';
   matchFound = false;
-  remainingSeconds = 30;
+  elapsedSeconds = 0;
 
-  if (countdownTimer) clearInterval(countdownTimer);
+  if (elapsedTimer) clearInterval(elapsedTimer);
 
   matchStatusText.textContent = '🔍 正在搜尋線上真人對手...';
-  const timerBadge = document.getElementById('queue-countdown');
-  if (timerBadge) timerBadge.textContent = remainingSeconds;
+  const timerEl = document.getElementById('queue-timer');
+  if (timerEl) timerEl.textContent = '00:00';
 
   oppAvatarEl.textContent = '❓';
   oppNameEl.textContent = '搜尋對手中...';
@@ -103,7 +109,7 @@ function startMatchmaking() {
       const data = snap.val();
       if (data && data.matchedWith) {
         matchFound = true;
-        if (countdownTimer) clearInterval(countdownTimer);
+        if (elapsedTimer) clearInterval(elapsedTimer);
         pairWithRealOpponent(data.matchedWith);
       }
     });
@@ -115,11 +121,12 @@ function startMatchmaking() {
       for (const otherUid in allQueue) {
         if (otherUid !== uid) {
           const other = allQueue[otherUid];
-          if (other && (other.status === 'searching' || !other.matchedWith) && (Date.now() - (other.createdAt || 0) < 60000)) {
+          // 檢查對方是否正在搜尋且尚未配對
+          if (other && (other.status === 'searching' && !other.matchedWith) && (Date.now() - (other.createdAt || 0) < 120000)) {
             matchFound = true;
-            if (countdownTimer) clearInterval(countdownTimer);
+            if (elapsedTimer) clearInterval(elapsedTimer);
 
-            // 雙向確認綁定
+            // 雙向即時握手配對
             update(ref(db, 'rankedQueue/' + otherUid), {
               status: 'matched',
               matchedWith: { uid, nickname, points: myPoints, avatar: myAvatarEl.textContent }
@@ -127,7 +134,7 @@ function startMatchmaking() {
 
             update(queueRef, {
               status: 'matched',
-              matchedWith: { uid: other.uid, nickname: other.nickname, points: other.points, avatar: other.avatar }
+              matchedWith: { uid: other.uid, nickname: other.nickname, points: other.points || 0, avatar: other.avatar || '🏸' }
             }).catch(() => {});
 
             pairWithRealOpponent(other);
@@ -140,19 +147,10 @@ function startMatchmaking() {
     console.warn('Firebase RTDB queue initialization error:', err);
   }
 
-  // 4. 倒數 30 秒計時器
-  countdownTimer = setInterval(() => {
-    remainingSeconds--;
-    if (timerBadge) timerBadge.textContent = remainingSeconds;
-
-    if (remainingSeconds <= 0) {
-      if (countdownTimer) clearInterval(countdownTimer);
-      if (!matchFound) {
-        matchFound = true;
-        if (queueRef) remove(queueRef).catch(() => {});
-        pairWithAIContender();
-      }
-    }
+  // 4. 正向增加計時器 (00:00 向上遞增)
+  elapsedTimer = setInterval(() => {
+    elapsedSeconds++;
+    if (timerEl) timerEl.textContent = formatTime(elapsedSeconds);
   }, 1000);
 
   // 綁定一鍵挑戰 AI 按鈕
@@ -161,7 +159,7 @@ function startMatchmaking() {
     btnPlayAi.onclick = () => {
       if (!matchFound) {
         matchFound = true;
-        if (countdownTimer) clearInterval(countdownTimer);
+        if (elapsedTimer) clearInterval(elapsedTimer);
         if (queueRef) remove(queueRef).catch(() => {});
         pairWithAIContender();
       }
@@ -171,10 +169,10 @@ function startMatchmaking() {
 
 // 配對到真人玩家
 function pairWithRealOpponent(opponent) {
-  if (countdownTimer) clearInterval(countdownTimer);
+  if (elapsedTimer) clearInterval(elapsedTimer);
   setTimeout(() => {
     if (queueRef) remove(queueRef).catch(() => {});
-  }, 1500);
+  }, 2500);
 
   currentOpponent = {
     name: opponent.nickname || '線上嘉賓',
