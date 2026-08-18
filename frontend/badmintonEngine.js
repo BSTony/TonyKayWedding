@@ -248,64 +248,81 @@ export class BadmintonEngine {
 
     // 1. 同步 P1
     if (state.p1) {
+      const sX = Number.isFinite(state.p1.x) ? state.p1.x : 36;
+      const sY = Number.isFinite(state.p1.y) ? state.p1.y : 244;
+      const sState = state.p1.s !== undefined ? state.p1.s : (state.p1.state !== undefined ? state.p1.state : 0);
+      const sFrame = state.p1.f !== undefined ? state.p1.f : (state.p1.frameNumber !== undefined ? state.p1.frameNumber : 0);
+
       if (isPredicted && isP1) {
-        // 本地是 P1：客戶端預測優先，伺服器柔和校準
-        const diffX = Math.abs(p1.x - state.p1.x);
-        const diffY = Math.abs(p1.y - state.p1.y);
-        if (diffX > 45 || diffY > 45 || this.roundState !== 'playing') {
-          p1.x = state.p1.x;
-          p1.y = state.p1.y;
-          p1.state = state.p1.s !== undefined ? state.p1.s : state.p1.state;
-          p1.frameNumber = state.p1.f !== undefined ? state.p1.f : state.p1.frameNumber;
-        } else {
-          p1.x += (state.p1.x - p1.x) * 0.2;
-          p1.y += (state.p1.y - p1.y) * 0.2;
+        // 本地是 P1：本人物理以本地 0ms 預測為主，僅在重大偏差或換局時校正
+        const diffX = Math.abs(p1.x - sX);
+        const diffY = Math.abs(p1.y - sY);
+        if (diffX > 24 || diffY > 24 || this.roundState !== 'playing' || state.newRound) {
+          p1.x = sX;
+          p1.y = sY;
+          p1.state = sState;
+          p1.frameNumber = sFrame;
         }
       } else {
-        // 本地是 P2 或觀戰：P1 是遠端對手，100% 聽從伺服器
-        p1.x = state.p1.x;
-        p1.y = state.p1.y;
-        p1.state = state.p1.s !== undefined ? state.p1.s : state.p1.state;
-        p1.frameNumber = state.p1.f !== undefined ? state.p1.f : state.p1.frameNumber;
+        // 本地是 P2 或觀戰：P1 100% 聽從伺服器
+        p1.x = sX;
+        p1.y = sY;
+        p1.state = sState;
+        p1.frameNumber = sFrame;
       }
       p1.divingDirection = state.p1.d !== undefined ? state.p1.d : (state.p1.divingDirection || 1);
     }
 
     // 2. 同步 P2
     if (state.p2) {
+      const sX = Number.isFinite(state.p2.x) ? state.p2.x : 396;
+      const sY = Number.isFinite(state.p2.y) ? state.p2.y : 244;
+      const sState = state.p2.s !== undefined ? state.p2.s : (state.p2.state !== undefined ? state.p2.state : 0);
+      const sFrame = state.p2.f !== undefined ? state.p2.f : (state.p2.frameNumber !== undefined ? state.p2.frameNumber : 0);
+
       if (isPredicted && isP2) {
-        // 本地是 P2：客戶端預測優先，伺服器柔和校準
-        const diffX = Math.abs(p2.x - state.p2.x);
-        const diffY = Math.abs(p2.y - state.p2.y);
-        if (diffX > 45 || diffY > 45 || this.roundState !== 'playing') {
-          p2.x = state.p2.x;
-          p2.y = state.p2.y;
-          p2.state = state.p2.s !== undefined ? state.p2.s : state.p2.state;
-          p2.frameNumber = state.p2.f !== undefined ? state.p2.f : state.p2.frameNumber;
-        } else {
-          p2.x += (state.p2.x - p2.x) * 0.2;
-          p2.y += (state.p2.y - p2.y) * 0.2;
+        // 本地是 P2：本人物理以本地 0ms 預測為主，僅在重大偏差或換局時校正
+        const diffX = Math.abs(p2.x - sX);
+        const diffY = Math.abs(p2.y - sY);
+        if (diffX > 24 || diffY > 24 || this.roundState !== 'playing' || state.newRound) {
+          p2.x = sX;
+          p2.y = sY;
+          p2.state = sState;
+          p2.frameNumber = sFrame;
         }
       } else {
-        // 本地是 P1 或觀戰：P2 是遠端對手，100% 聽從伺服器
-        p2.x = state.p2.x;
-        p2.y = state.p2.y;
-        p2.state = state.p2.s !== undefined ? state.p2.s : state.p2.state;
-        p2.frameNumber = state.p2.f !== undefined ? state.p2.f : state.p2.frameNumber;
+        // 本地是 P1 或觀戰：P2 100% 聽從伺服器
+        p2.x = sX;
+        p2.y = sY;
+        p2.state = sState;
+        p2.frameNumber = sFrame;
       }
       p2.divingDirection = state.p2.d !== undefined ? state.p2.d : (state.p2.divingDirection || -1);
     }
 
-    // 3. 同步排球 (權威伺服器裁定)
+    // 3. 同步排球 (權威伺服器物理 + 拋物線推算)
     if (state.b) {
-      b.x = state.b.x;
-      b.y = state.b.y;
+      b.x = Number.isFinite(state.b.x) ? state.b.x : 56;
+      b.y = Number.isFinite(state.b.y) ? state.b.y : 0;
+      b.xVelocity = Number.isFinite(state.b.vx) ? state.b.vx : 0;
+      b.yVelocity = Number.isFinite(state.b.vy) ? state.b.vy : 1;
       b.rotation = state.b.r !== undefined ? state.b.r : (state.b.rot || 0);
       b.isPowerHit = state.b.p !== undefined ? !!state.b.p : !!state.b.power;
-      b.previousX = state.b.px !== undefined ? state.b.px : b.x;
-      b.previousY = state.b.py !== undefined ? state.b.py : b.y;
-      b.previousPreviousX = state.b.ppx !== undefined ? state.b.ppx : b.x;
-      b.previousPreviousY = state.b.ppy !== undefined ? state.b.ppy : b.y;
+
+      this.ballServerPos = {
+        x: b.x,
+        y: b.y,
+        vx: b.xVelocity,
+        vy: b.yVelocity,
+        time: performance.now()
+      };
+    }
+
+    // 🌟 換局或得分時：立即重置平滑位置，防止任何飄移/慢速拖曳
+    if (state.newRound || state.round === 'scoring' || state.round === 'game_over' || !this.smoothBall) {
+      this.smoothP1 = { x: p1.x, y: p1.y };
+      this.smoothP2 = { x: p2.x, y: p2.y };
+      this.smoothBall = { x: b.x, y: b.y };
     }
 
     if (state.s1 !== undefined && state.s2 !== undefined) {
@@ -316,7 +333,7 @@ export class BadmintonEngine {
       }
     }
 
-    // 同步圓局狀態
+    // 同步局狀態
     if (state.round && state.round !== this.roundState) {
       this.roundState = state.round;
     }
@@ -325,7 +342,6 @@ export class BadmintonEngine {
     if ((state.round === 'game_over' || this.playerScore >= this.maxScore || this.compScore >= this.maxScore) && this.roundState !== 'game_over') {
       this.roundState = 'game_over';
       if (this.onGameOver) {
-        // p1 視角：s1 是自己；p2 視角：s2 是自己
         const myScore = this.cloudRole === 'p2' ? state.s2 : state.s1;
         const oppScore = this.cloudRole === 'p2' ? state.s1 : state.s2;
         if (this.onGameOver) this.onGameOver(myScore > oppScore);
@@ -624,25 +640,42 @@ export class BadmintonEngine {
     const targetBallX = Number.isFinite(b.x) ? b.x : 56;
     const targetBallY = Number.isFinite(b.y) ? b.y : 100;
 
-    // 皮卡丘平滑漸進 (大於 70px 瞬移時直接重置，否則 0.52 Lerp 極速滑順)
-    if (Math.abs(this.smoothP1.x - targetP1X) > 70) this.smoothP1.x = targetP1X;
-    else this.smoothP1.x += (targetP1X - this.smoothP1.x) * 0.52;
+    // 皮卡丘平滑漸進 (大於 50px 瞬移時直接重置，否則 0.45 Lerp 絲滑跟隨)
+    if (Math.abs(this.smoothP1.x - targetP1X) > 50) this.smoothP1.x = targetP1X;
+    else this.smoothP1.x += (targetP1X - this.smoothP1.x) * 0.45;
 
-    if (Math.abs(this.smoothP1.y - targetP1Y) > 70) this.smoothP1.y = targetP1Y;
-    else this.smoothP1.y += (targetP1Y - this.smoothP1.y) * 0.52;
+    if (Math.abs(this.smoothP1.y - targetP1Y) > 50) this.smoothP1.y = targetP1Y;
+    else this.smoothP1.y += (targetP1Y - this.smoothP1.y) * 0.45;
 
-    if (Math.abs(this.smoothP2.x - targetP2X) > 70) this.smoothP2.x = targetP2X;
-    else this.smoothP2.x += (targetP2X - this.smoothP2.x) * 0.52;
+    if (Math.abs(this.smoothP2.x - targetP2X) > 50) this.smoothP2.x = targetP2X;
+    else this.smoothP2.x += (targetP2X - this.smoothP2.x) * 0.45;
 
-    if (Math.abs(this.smoothP2.y - targetP2Y) > 70) this.smoothP2.y = targetP2Y;
-    else this.smoothP2.y += (targetP2Y - this.smoothP2.y) * 0.52;
+    if (Math.abs(this.smoothP2.y - targetP2Y) > 50) this.smoothP2.y = targetP2Y;
+    else this.smoothP2.y += (targetP2Y - this.smoothP2.y) * 0.45;
 
-    // 羽毛球平滑漸進 (0.62 Lerp + 平滑補間)
-    if (Math.abs(this.smoothBall.x - targetBallX) > 90) this.smoothBall.x = targetBallX;
-    else this.smoothBall.x += (targetBallX - this.smoothBall.x) * 0.62;
+    // 羽毛球 Dead Reckoning 物理外推 (在 33ms 網絡間隙內推算拋物線，消除卡頓與跳躍)
+    if (this.ballServerPos && this.roundState === 'playing') {
+      const elapsed = Math.max(0, performance.now() - this.ballServerPos.time);
+      const tFrames = Math.min(elapsed / 33.333, 1.8);
 
-    if (Math.abs(this.smoothBall.y - targetBallY) > 90) this.smoothBall.y = targetBallY;
-    else this.smoothBall.y += (targetBallY - this.smoothBall.y) * 0.62;
+      const estX = this.ballServerPos.x + this.ballServerPos.vx * tFrames;
+      let estY = this.ballServerPos.y + this.ballServerPos.vy * tFrames + 0.5 * 1.0 * tFrames * tFrames;
+      if (estY > 252) estY = 252;
+
+      if (Math.abs(this.smoothBall.x - estX) > 60 || Math.abs(this.smoothBall.y - estY) > 60) {
+        this.smoothBall.x = estX;
+        this.smoothBall.y = estY;
+      } else {
+        this.smoothBall.x += (estX - this.smoothBall.x) * 0.48;
+        this.smoothBall.y += (estY - this.smoothBall.y) * 0.48;
+      }
+    } else {
+      if (Math.abs(this.smoothBall.x - targetBallX) > 50) this.smoothBall.x = targetBallX;
+      else this.smoothBall.x += (targetBallX - this.smoothBall.x) * 0.48;
+
+      if (Math.abs(this.smoothBall.y - targetBallY) > 50) this.smoothBall.y = targetBallY;
+      else this.smoothBall.y += (targetBallY - this.smoothBall.y) * 0.48;
+    }
   }
 
   drawTiledSprite(name, rectX, rectY, rectW, rectH) {
