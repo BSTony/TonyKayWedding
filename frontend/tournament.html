@@ -383,151 +383,118 @@
       box-sizing: border-box;
     }
 
-    /* ─── 圓盤虛擬搖桿 (Joystick Disc) ─── */
-    .controls .joystick-disc {
-      position: relative;
-      width: clamp(125px, 34vw, 155px);
-      height: clamp(125px, 34vw, 155px);
-      max-width: 165px;
-      max-height: 165px;
-      border-radius: 50%;
-      background: radial-gradient(circle, rgba(30, 41, 59, 0.75) 0%, rgba(15, 23, 42, 0.92) 100%);
-      border: 2px solid rgba(255, 255, 255, 0.4);
-      box-shadow: 0 8px 32px rgba(0, 0, 0, 0.65), inset 0 0 20px rgba(56, 189, 248, 0.2);
-      backdrop-filter: blur(12px);
-      -webkit-backdrop-filter: blur(12px);
+    /* ─── 實體鍵盤風格按鍵 (Keyboard Keycap Style) ─── */
+    .keyboard-cluster {
       display: flex;
+      flex-direction: column;
       align-items: center;
-      justify-content: center;
-      touch-action: none;
+      gap: clamp(4px, 1.2vw, 8px);
       user-select: none;
+      touch-action: none;
       pointer-events: auto;
     }
 
-    .joystick-arrows {
-      position: absolute;
-      width: 100%; height: 100%;
-      pointer-events: none;
-    }
-    .j-arrow {
-      position: absolute;
-      font-size: 13px;
-      font-weight: 900;
-      color: rgba(255, 255, 255, 0.4);
-      text-shadow: 0 0 6px rgba(56, 189, 248, 0.4);
-      transition: color 0.08s, transform 0.08s;
-    }
-    .j-arrow.active {
-      color: #38bdf8;
-      text-shadow: 0 0 14px #38bdf8;
-      transform: scale(1.25);
-    }
-    .j-up    { top: 8px; left: 50%; transform: translateX(-50%); }
-    .j-down  { bottom: 8px; left: 50%; transform: translateX(-50%); }
-    .j-left  { left: 8px; top: 50%; transform: translateY(-50%); }
-    .j-right { right: 8px; top: 50%; transform: translateY(-50%); }
-
-    /* 八向微光引導圈 */
-    .joystick-crosshair {
-      position: absolute;
-      width: 62%; height: 62%;
-      border-radius: 50%;
-      border: 1.5px dashed rgba(255, 255, 255, 0.18);
-      pointer-events: none;
-    }
-
-    /* 搖桿推桿中心圓鈕 */
-    .joystick-knob {
-      width: clamp(52px, 14vw, 62px);
-      height: clamp(52px, 14vw, 62px);
-      border-radius: 50%;
-      background: radial-gradient(circle, #38bdf8 0%, #0284c7 65%, #0369a1 100%);
-      border: 2.5px solid rgba(255, 255, 255, 0.9);
-      box-shadow: 0 4px 18px rgba(2, 132, 199, 0.7), inset 0 2px 4px rgba(255, 255, 255, 0.8);
-      pointer-events: none;
-      transform: translate(0px, 0px);
-      transition: transform 0.04s ease-out;
+    .keycap-row {
       display: flex;
-      align-items: center;
+      gap: clamp(4px, 1.2vw, 8px);
       justify-content: center;
     }
-    .joystick-knob::after {
-      content: '';
-      width: 18px; height: 18px;
-      border-radius: 50%;
-      background: rgba(255, 255, 255, 0.9);
-      box-shadow: 0 0 10px rgba(255, 255, 255, 0.95);
-    }
-    .joystick-knob.active {
-      box-shadow: 0 0 26px rgba(56, 189, 248, 0.95), inset 0 2px 6px rgba(255, 255, 255, 0.95);
-    }
 
-    /* ─── 右手雙按鈕群組 (跳躍 Jump ＋ 殺球 Hit) ─── */
-    .controls .action {
-      display: flex;
-      align-items: flex-end;
-      pointer-events: auto;
-      touch-action: none;
-    }
-
-    .action-buttons-group {
-      display: flex;
-      align-items: center;
-      gap: clamp(10px, 3vw, 16px);
-      pointer-events: auto;
-      touch-action: none;
-    }
-
-    .btn-action {
-      width: clamp(62px, 17vw, 82px);
-      height: clamp(62px, 17vw, 82px);
-      border-radius: 50%;
-      color: white;
+    .keycap-btn {
+      position: relative;
+      width: clamp(48px, 13vw, 66px);
+      height: clamp(46px, 12.5vw, 62px);
+      background: linear-gradient(180deg, #334155 0%, #1e293b 100%);
+      border: 1.5px solid rgba(255, 255, 255, 0.25);
+      border-bottom: 5px solid #0f172a; /* 鍵帽 3D 厚度立體邊緣 */
+      border-radius: 10px;
+      box-shadow: 0 5px 12px rgba(0, 0, 0, 0.6), inset 0 1px 1px rgba(255, 255, 255, 0.35);
+      color: #f8fafc;
       display: flex;
       flex-direction: column;
       align-items: center;
       justify-content: center;
-      user-select: none;
-      touch-action: none;
-      transition: transform 0.08s ease, box-shadow 0.08s ease;
       cursor: pointer;
+      touch-action: none;
+      user-select: none;
+      transition: all 0.05s ease;
+      font-family: inherit;
     }
-    .btn-action:active, .btn-action.active {
-      transform: scale(0.88);
+
+    .keycap-btn:active, .keycap-btn.active {
+      transform: translateY(4px); /* 鍵盤真實下壓感 */
+      border-bottom-width: 1.5px;
+      background: linear-gradient(180deg, #38bdf8 0%, #0284c7 100%);
+      box-shadow: 0 0 18px rgba(56, 189, 248, 0.85), inset 0 2px 4px rgba(0, 0, 0, 0.4);
+      color: #ffffff;
     }
-    .btn-action-icon {
-      font-size: clamp(20px, 6vw, 28px);
+
+    .keycap-icon {
+      font-size: clamp(16px, 4.5vw, 22px);
       line-height: 1;
-      filter: drop-shadow(0 2px 4px rgba(0,0,0,0.5));
+      font-weight: 900;
+      filter: drop-shadow(0 1px 2px rgba(0,0,0,0.6));
     }
-    .btn-action-text {
+
+    .keycap-sub {
+      font-size: clamp(9px, 2.4vw, 11px);
+      color: rgba(255, 255, 255, 0.65);
+      font-weight: 700;
+      margin-top: 2px;
+      line-height: 1;
+      font-family: monospace;
+      letter-spacing: 0.5px;
+    }
+
+    /* 右側動作鍵群組 (鍵盤風格) */
+    .keycap-action-group {
+      display: flex;
+      gap: clamp(8px, 2.5vw, 16px);
+      align-items: center;
+      pointer-events: auto;
+      touch-action: none;
+    }
+
+    .keycap-action-btn {
+      width: clamp(68px, 18vw, 92px);
+      height: clamp(52px, 14vw, 70px);
+      border-radius: 12px;
+    }
+
+    .keycap-label {
       font-size: clamp(11px, 3vw, 13px);
       font-weight: 900;
-      letter-spacing: 1px;
-      margin-top: 3px;
+      margin-top: 1px;
+      line-height: 1.1;
       text-shadow: 0 1px 3px rgba(0,0,0,0.8);
     }
 
-    /* 跳躍鍵 (Sky Blue) */
-    .btn-jump {
-      background: radial-gradient(circle, rgba(14, 165, 233, 0.8) 0%, rgba(2, 132, 199, 0.55) 100%);
-      border: 3px solid rgba(186, 230, 253, 0.9);
-      box-shadow: 0 0 24px rgba(14, 165, 233, 0.7), 0 8px 24px rgba(0, 0, 0, 0.6), inset 0 2px 4px rgba(255, 255, 255, 0.8);
+    /* 跳躍鍵 (Sky Blue 鍵盤配色) */
+    .keycap-jump {
+      background: linear-gradient(180deg, #0284c7 0%, #0369a1 100%);
+      border: 1.5px solid rgba(186, 230, 253, 0.4);
+      border-bottom: 5px solid #082f49;
+      box-shadow: 0 5px 14px rgba(2, 132, 199, 0.5), inset 0 1px 2px rgba(255, 255, 255, 0.5);
     }
-    .btn-jump:active, .btn-jump.active {
-      box-shadow: 0 0 36px rgba(56, 189, 248, 0.95), 0 4px 12px rgba(0, 0, 0, 0.8);
-      background: radial-gradient(circle, rgba(56, 189, 248, 0.98) 0%, rgba(14, 165, 233, 0.85) 100%);
+    .keycap-jump:active, .keycap-jump.active {
+      transform: translateY(4px);
+      border-bottom-width: 1.5px;
+      background: linear-gradient(180deg, #38bdf8 0%, #0284c7 100%);
+      box-shadow: 0 0 24px rgba(56, 189, 248, 0.95);
     }
 
-    /* 殺球鍵 (Ruby Red) */
-    .btn-hit {
-      background: radial-gradient(circle, rgba(239, 68, 68, 0.8) 0%, rgba(185, 28, 28, 0.55) 100%);
-      border: 3px solid rgba(254, 202, 202, 0.9);
-      box-shadow: 0 0 24px rgba(239, 68, 68, 0.7), 0 8px 24px rgba(0, 0, 0, 0.6), inset 0 2px 4px rgba(255, 255, 255, 0.8);
+    /* 殺球鍵 (Ruby Red 鍵盤配色) */
+    .keycap-hit {
+      background: linear-gradient(180deg, #dc2626 0%, #991b1b 100%);
+      border: 1.5px solid rgba(254, 202, 202, 0.4);
+      border-bottom: 5px solid #450a0a;
+      box-shadow: 0 5px 14px rgba(220, 38, 38, 0.5), inset 0 1px 2px rgba(255, 255, 255, 0.5);
     }
-    .btn-hit:active, .btn-hit.active {
-      box-shadow: 0 0 36px rgba(239, 68, 68, 0.95), 0 4px 12px rgba(0, 0, 0, 0.8);
-      background: radial-gradient(circle, rgba(248, 113, 113, 0.98) 0%, rgba(220, 38, 38, 0.85) 100%);
+    .keycap-hit:active, .keycap-hit.active {
+      transform: translateY(4px);
+      border-bottom-width: 1.5px;
+      background: linear-gradient(180deg, #ef4444 0%, #dc2626 100%);
+      box-shadow: 0 0 24px rgba(239, 68, 68, 0.95);
     }
 
     /* 浮動愛心與拍手動畫 */
@@ -675,30 +642,44 @@
         <div class="badge-score" id="arena-p2-score">0</div>
       </div>
 
-      <!-- 參賽選手專屬虛擬手把 (左手 360° 圓盤搖桿 ＋ 右手【跳躍 Jump】＋【殺球 Hit】雙鍵) -->
+      <!-- 參賽選手專屬虛擬手把 (實體鍵盤風格按鈕) -->
       <div class="controls" id="arena-controls" style="display: none;">
-        <div class="joystick-disc" id="joystick-disc">
-          <div class="joystick-arrows">
-            <span class="j-arrow j-up" id="j-up">▲</span>
-            <span class="j-arrow j-right" id="j-right">►</span>
-            <span class="j-arrow j-down" id="j-down">▼</span>
-            <span class="j-arrow j-left" id="j-left">◄</span>
+        <!-- 左手：鍵盤方向鍵區 (上排 ▲，下排 ◀ ▼ ▶ 同一水平線！) -->
+        <div class="keyboard-cluster" id="keyboard-cluster">
+          <div class="keycap-row">
+            <button class="keycap-btn" id="dpad-up" aria-label="上 (W)">
+              <span class="keycap-icon">▲</span>
+              <span class="keycap-sub">W</span>
+            </button>
           </div>
-          <div class="joystick-crosshair"></div>
-          <div class="joystick-knob" id="joystick-knob"></div>
+          <div class="keycap-row">
+            <button class="keycap-btn" id="dpad-left" aria-label="左 (A)">
+              <span class="keycap-icon">◀</span>
+              <span class="keycap-sub">A</span>
+            </button>
+            <button class="keycap-btn" id="dpad-down" aria-label="下 (S)">
+              <span class="keycap-icon">▼</span>
+              <span class="keycap-sub">S</span>
+            </button>
+            <button class="keycap-btn" id="dpad-right" aria-label="右 (D)">
+              <span class="keycap-icon">▶</span>
+              <span class="keycap-sub">D</span>
+            </button>
+          </div>
         </div>
 
-        <div class="action">
-          <div class="action-buttons-group">
-            <button class="btn-action btn-jump" id="btn-jump">
-              <span class="btn-action-icon">🚀</span>
-              <span class="btn-action-text">跳躍</span>
-            </button>
-            <button class="btn-action btn-hit" id="btn-hit">
-              <span class="btn-action-icon">⚡</span>
-              <span class="btn-action-text">殺球</span>
-            </button>
-          </div>
+        <!-- 右手：鍵盤動作按鈕 (跳躍 Jump ＋ 殺球 Hit) -->
+        <div class="keycap-action-group">
+          <button class="keycap-btn keycap-action-btn keycap-jump" id="btn-jump" aria-label="跳躍">
+            <span class="keycap-icon">🚀</span>
+            <span class="keycap-label">跳躍</span>
+            <span class="keycap-sub">Space</span>
+          </button>
+          <button class="keycap-btn keycap-action-btn keycap-hit" id="btn-hit" aria-label="殺球">
+            <span class="keycap-icon">⚡</span>
+            <span class="keycap-label">殺球</span>
+            <span class="keycap-sub">J 鍵</span>
+          </button>
         </div>
       </div>
 
