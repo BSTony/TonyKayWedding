@@ -348,13 +348,14 @@ function enterArenaMatch() {
       }
     });
 
-    // 🌟 Firebase 純客戶端模式：雙方均不做物理計算
-    //    P1/P2 各自把鍵盤輸入寫到 Firebase
-    //    雲端伺服器 (24/7 always-on) 負責計算物理、廣播 state
-    //    雙方讀取 state 渲染，完全同步，不受分頁切換/螢幕刷新率影響
-    gameEngine.startFirebaseClient(role, (input) => {
+    // 🌟 優先連線 Google Cloud Run 專屬伺服器 (台灣 asia-east1 極速 ~10ms 零延遲)
+    const CLOUD_WS_URL = localStorage.getItem('wbc_cloud_server_url') || 'wss://badminton-server-308194662340.asia-east1.run.app';
+    gameEngine.startCloudServer(CLOUD_WS_URL, currentRoomId, role, 5);
+
+    // 同時把按鍵寫入 Firebase RTDB 作為雙重備援
+    const sendFbInput = (input) => {
       set(ref(db, 'rankedRooms/' + currentRoomId + '/' + inputKey), input).catch(() => {});
-    }, 5);
+    };
 
     let serverStateReceived = false;
     onValue(ref(db, 'rankedRooms/' + currentRoomId + '/state'), (snap) => {

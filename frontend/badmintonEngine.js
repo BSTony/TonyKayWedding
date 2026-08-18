@@ -201,20 +201,7 @@ export class BadmintonEngine {
           const t = data.t || data.type;
 
           if (t === 's') { // 雲端權威狀態廣播
-            this.remoteHostState = data;
-            if (data.s1 !== undefined && data.s2 !== undefined) {
-              if (this.playerScore !== data.s1 || this.compScore !== data.s2) {
-                this.playerScore = data.s1;
-                this.compScore = data.s2;
-                if (this.onScoreUpdate) this.onScoreUpdate(this.playerScore, this.compScore);
-              }
-            }
-            if (data.round && data.round !== this.roundState) {
-              this.roundState = data.round;
-            }
-            if (data.punch) {
-              this.addPunchEffect(data.punch.x, data.punch.y, data.punch.isPower);
-            }
+            this.receiveRemoteState(data);
           } else if (t === 'game_over') {
             this.roundState = 'game_over';
             const won = (this.cloudRole === 'p1' && data.winner === 'p1') || (this.cloudRole === 'p2' && data.winner === 'p2');
@@ -246,10 +233,9 @@ export class BadmintonEngine {
     this.remoteGuestInput = { ...input };
   }
 
-  // 接收伺服器廣播的權威畫面（適用 guest 模式 及 firebase 客戶端模式）
+  // 接收伺服器廣播的權威畫面（適用 cloud, guest, firebase 模式）
   receiveRemoteState(state) {
     if (!state) return;
-    if (this.multiplayerRole !== 'guest' && this.multiplayerRole !== 'firebase') return;
     this.remoteHostState = state;
 
     const p1 = this.pikaPhysics.player1;
@@ -259,22 +245,22 @@ export class BadmintonEngine {
     if (state.p1) {
       p1.x = state.p1.x;
       p1.y = state.p1.y;
-      p1.state = state.p1.state;
-      p1.frameNumber = state.p1.frameNumber;
-      p1.divingDirection = state.p1.divingDirection || 1;
+      p1.state = state.p1.s !== undefined ? state.p1.s : state.p1.state;
+      p1.frameNumber = state.p1.f !== undefined ? state.p1.f : state.p1.frameNumber;
+      p1.divingDirection = state.p1.d !== undefined ? state.p1.d : (state.p1.divingDirection || 1);
     }
     if (state.p2) {
       p2.x = state.p2.x;
       p2.y = state.p2.y;
-      p2.state = state.p2.state;
-      p2.frameNumber = state.p2.frameNumber;
-      p2.divingDirection = state.p2.divingDirection || -1;
+      p2.state = state.p2.s !== undefined ? state.p2.s : state.p2.state;
+      p2.frameNumber = state.p2.f !== undefined ? state.p2.f : state.p2.frameNumber;
+      p2.divingDirection = state.p2.d !== undefined ? state.p2.d : (state.p2.divingDirection || -1);
     }
     if (state.b) {
       b.x = state.b.x;
       b.y = state.b.y;
-      b.rotation = state.b.rot || 0;
-      b.isPowerHit = !!state.b.power;
+      b.rotation = state.b.r !== undefined ? state.b.r : (state.b.rot || 0);
+      b.isPowerHit = state.b.p !== undefined ? !!state.b.p : !!state.b.power;
       b.previousX = state.b.px !== undefined ? state.b.px : b.x;
       b.previousY = state.b.py !== undefined ? state.b.py : b.y;
       b.previousPreviousX = state.b.ppx !== undefined ? state.b.ppx : b.x;
