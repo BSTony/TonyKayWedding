@@ -348,56 +348,20 @@ function enterArenaMatch() {
       }
     });
 
-    // 🌟 優先連線 Google Cloud Run 專屬伺服器 (台灣 asia-east1 極速 ~10ms 零延遲)
-    const CLOUD_WS_URL = localStorage.getItem('wbc_cloud_server_url') || 'wss://badminton-server-308194662340.asia-east1.run.app';
-    gameEngine.startCloudServer(CLOUD_WS_URL, currentRoomId, role, 5);
-
-    // 同時把按鍵寫入 Firebase RTDB 作為雙重備援
-    const sendFbInput = (input) => {
+    // 🌟 100% 雲端伺服器權威模式 (Google Cloud Run Server-Authoritative)
+    //    1P 與 2P 均為純客戶端，完全不做本地物理計算，只將按鍵指令發送至 Firebase
+    //    由 Google Cloud Run 專屬伺服器在台灣機房進行唯一的 30 FPS 物理計算與廣播
+    //    雙方接收同一份 state 渲染，徹底杜絕多引擎衝突瞬移！
+    gameEngine.startFirebaseClient(role, (input) => {
       set(ref(db, 'rankedRooms/' + currentRoomId + '/' + inputKey), input).catch(() => {});
-    };
+    }, 5);
 
-    let serverStateReceived = false;
     onValue(ref(db, 'rankedRooms/' + currentRoomId + '/state'), (snap) => {
       const state = snap.val();
       if (state && gameEngine) {
-        serverStateReceived = true;
         gameEngine.receiveRemoteState(state);
       }
     });
-
-    // 備援：若 3 秒內沒收到伺服器廣播， P1 自動接手物理計算（伺服器未啟動時備用）
-    if (isHostPlayer) {
-      setTimeout(() => {
-        if (!serverStateReceived && gameEngine && !matchEnded) {
-          console.warn('備援：伺服器未回應， P1 自動接手權威物理計算');
-          // 切換為 Host 模式
-          gameEngine.stop();
-          gameEngine = new BadmintonEngine('game-canvas');
-          setGlobalEngine(gameEngine); // 登錄全域供 visibilitychange 監聽
-          bindMobileControls();
-          gameEngine.onScoreUpdate = (p1Score, p2Score) => {
-            arenaP1Score.textContent = p1Score;
-            arenaP2Score.textContent = p2Score;
-          };
-          gameEngine.onGameOver = (playerWon) => {
-            matchEnded = true;
-            handleRankedGameOver(playerWon);
-          };
-          gameEngine.startMultiplayer('host', 5, null, (state) => {
-            set(ref(db, 'rankedRooms/' + currentRoomId + '/state'), state).catch(() => {});
-          });
-          onValue(ref(db, 'rankedRooms/' + currentRoomId + '/p2Input'), (snap) => {
-            const input = snap.val();
-            if (input && gameEngine) gameEngine.setRemoteGuestInput(input);
-          });
-          onValue(ref(db, 'rankedRooms/' + currentRoomId + '/guestInput'), (snap) => {
-            const input = snap.val();
-            if (input && gameEngine) gameEngine.setRemoteGuestInput(input);
-          });
-        }
-      }, 3000);
-    }
   } else {
     // 單人練習 / AI 對戰模式
     gameEngine.start(5, currentOpponent.boldness || 3);
