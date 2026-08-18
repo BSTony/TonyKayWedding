@@ -129,7 +129,7 @@
     <!-- Mode CTAs -->
     <div class="mode-selection animate-scaleIn" style="display: flex; flex-direction: column; gap: 12px; margin-bottom: 16px;">
       <!-- Ranked Match Mode -->
-      <button class="main-cta ranked-cta" onclick="window.location.href='./ranked.html'" style="background: linear-gradient(135deg, #8b5cf6, #6d28d9); box-shadow: 0 8px 24px rgba(139, 92, 246, 0.4); position: relative; overflow: hidden;">
+      <button class="main-cta ranked-cta" onclick="window.location.href='./ranked.html?mode=play'" style="background: linear-gradient(135deg, #8b5cf6, #6d28d9); box-shadow: 0 8px 24px rgba(139, 92, 246, 0.4); position: relative; overflow: hidden;">
         <span class="cta-icon">🥇</span>
         <span class="cta-title">排位積分賽 (RANKED MATCH)</span>
         <span class="cta-sub">即時天梯對決 · 升降積分 (+5/+3/+1/-1/-3/-5)</span>
@@ -140,8 +140,8 @@
           <span id="lobby-queue-badge" style="background: rgba(59, 130, 246, 0.35); border: 1px solid rgba(191, 219, 254, 0.5); border-radius: 12px; padding: 4px 10px; font-size: 12px; font-weight: 800; color: #bfdbfe; display: flex; align-items: center; gap: 4px;">
             ⏳ <span id="lobby-queue-count">0</span> 人排隊中
           </span>
-          <span style="background: rgba(16, 185, 129, 0.35); border: 1px solid rgba(167, 243, 208, 0.5); border-radius: 12px; padding: 4px 10px; font-size: 12px; font-weight: 800; color: #a7f3d0; display: flex; align-items: center; gap: 4px;">
-            👀 點擊觀戰
+          <span onclick="event.stopPropagation(); window.location.href='./ranked.html?mode=spectate'" style="background: rgba(16, 185, 129, 0.45); border: 1.5px solid rgba(167, 243, 208, 0.7); border-radius: 12px; padding: 4px 12px; font-size: 12px; font-weight: 800; color: #ffffff; display: flex; align-items: center; gap: 4px; cursor: pointer; box-shadow: 0 2px 8px rgba(16,185,129,0.3);">
+            👀 點擊觀戰 ➔
           </span>
         </div>
       </button>
@@ -438,7 +438,9 @@
     const rankedQueueRef = ref(db, 'rankedQueue');
     onValue(rankedQueueRef, snap => {
       const q = snap.val() || {};
-      const count = Object.keys(q).length;
+      const now = Date.now();
+      const activeQueue = Object.values(q).filter(item => item && item.status === 'searching' && item.createdAt && (now - item.createdAt < 45000));
+      const count = activeQueue.length;
       const el = document.getElementById('lobby-queue-count');
       if (el) el.textContent = count;
     });

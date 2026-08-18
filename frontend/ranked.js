@@ -60,6 +60,9 @@ const RANKED_CONTENDERS = [
   { name: '👑【最強王者】新娘 KAY', avatar: '👑', ptsOffset: +10, boldness: 6 }
 ];
 
+const urlParams = new URLSearchParams(window.location.search);
+let currentTab = urlParams.get('mode') === 'spectate' ? 'spectate' : 'play';
+
 let gameEngine = null;
 let currentOpponent = null;
 let queueKey = null;
@@ -80,9 +83,19 @@ function formatTime(sec) {
 // ── 即時監聽排隊人數與對戰中房間 ──
 onValue(ref(db, 'rankedQueue'), snap => {
   const q = snap.val() || {};
-  const count = Object.keys(q).length;
+  const now = Date.now();
+  const validQueue = [];
+  for (const key in q) {
+    const item = q[key];
+    if (item && item.createdAt && (now - item.createdAt < 45000) && item.status === 'searching') {
+      validQueue.push(item);
+    } else if (item && item.createdAt && (now - item.createdAt >= 45000)) {
+      // 自動清理超過 45 秒之廢棄排隊項目
+      remove(ref(db, 'rankedQueue/' + key)).catch(() => {});
+    }
+  }
   const el = document.getElementById('stat-queue-count');
-  if (el) el.textContent = count;
+  if (el) el.textContent = validQueue.length;
 });
 
 onValue(ref(db, 'rankedRooms'), snap => {
@@ -110,7 +123,22 @@ function renderLiveMatchesList(activeRooms) {
   if (!container) return;
 
   if (activeRooms.length === 0) {
-    container.innerHTML = `<div style="text-align:center; padding:12px 0; color:var(--text-secondary); font-size:12px;">目前暫無進行中的真人對戰，歡迎配對開戰！</div>`;
+    if (currentTab === 'spectate') {
+      container.innerHTML = `
+        <div style="background:white; border-radius:14px; padding:24px 16px; text-align:center; box-shadow:0 2px 8px rgba(0,0,0,0.04);">
+          <div style="font-size:36px; margin-bottom:6px;">🏸</div>
+          <div style="font-size:15px; font-weight:800; color:#1e1b4b;">目前暫無進行中的真人對戰</div>
+          <div style="font-size:12px; color:#64748b; margin-top:4px; margin-bottom:16px;">您可以親自上場開戰，成為全場矚目的焦點！</div>
+          <button id="btn-switch-to-matchmaking" style="background:linear-gradient(135deg, #8b5cf6, #6d28d9); color:white; border:none; border-radius:12px; padding:10px 22px; font-size:13px; font-weight:800; cursor:pointer; box-shadow:0 2px 8px rgba(139,92,246,0.3);">
+            ⚔️ 立即開始排位對決
+          </button>
+        </div>
+      `;
+      const btn = document.getElementById('btn-switch-to-matchmaking');
+      if (btn) btn.onclick = () => switchTab('play');
+    } else {
+      container.innerHTML = `<div style="text-align:center; padding:12px 0; color:var(--text-secondary); font-size:12px;">目前暫無進行中的真人對戰，歡迎配對開戰！</div>`;
+    }
     return;
   }
 
@@ -254,12 +282,64 @@ function stopSpectating() {
   const hudText = document.getElementById('arena-hud-text');
   if (hudText) hudText.style.display = 'block';
 
-  startMatchmaking();
+  switchTab(currentTab);
 }
 
 // 綁定退出觀戰按鈕
 document.getElementById('btn-exit-spectate')?.addEventListener('click', stopSpectating);
 document.getElementById('btn-spec-modal-close')?.addEventListener('click', stopSpectating);
+
+const tabPlayMode = document.getElementById('tab-play-mode');
+const tabSpectateMode = document.getElementById('tab-spectate-mode');
+const matchActivePanel = document.getElementById('match-active-panel');
+const btnPlayAi = document.getElementById('btn-play-ai');
+const btnCancelMatch = document.getElementById('btn-cancel-match');
+
+function switchTab(tab) {
+  currentTab = tab;
+  if (tab === 'play') {
+    if (tabPlayMode) {
+      tabPlayMode.style.background = '#8b5cf6';
+      tabPlayMode.style.color = 'white';
+      tabPlayMode.style.boxShadow = '0 2px 8px rgba(139,92,246,0.3)';
+    }
+    if (tabSpectateMode) {
+      tabSpectateMode.style.background = 'transparent';
+      tabSpectateMode.style.color = 'var(--text-secondary)';
+      tabSpectateMode.style.boxShadow = 'none';
+    }
+    if (matchActivePanel) matchActivePanel.style.display = 'block';
+    if (btnPlayAi) btnPlayAi.style.display = 'block';
+    if (btnCancelMatch) btnCancelMatch.style.display = 'block';
+
+    startMatchmaking();
+  } else {
+    // 觀戰大廳 Tab
+    if (tabSpectateMode) {
+      tabSpectateMode.style.background = '#8b5cf6';
+      tabSpectateMode.style.color = 'white';
+      tabSpectateMode.style.boxShadow = '0 2px 8px rgba(139,92,246,0.3)';
+    }
+    if (tabPlayMode) {
+      tabPlayMode.style.background = 'transparent';
+      tabPlayMode.style.color = 'var(--text-secondary)';
+      tabPlayMode.style.boxShadow = 'none';
+    }
+    if (matchActivePanel) matchActivePanel.style.display = 'none';
+    if (btnPlayAi) btnPlayAi.style.display = 'none';
+    if (btnCancelMatch) btnCancelMatch.style.display = 'none';
+
+    // 退出排隊，純觀戰
+    if (queueRef) {
+      remove(queueRef).catch(() => {});
+      queueRef = null;
+    }
+    if (elapsedTimer) clearInterval(elapsedTimer);
+  }
+}
+
+if (tabPlayMode) tabPlayMode.addEventListener('click', () => switchTab('play'));
+if (tabSpectateMode) tabSpectateMode.addEventListener('click', () => switchTab('spectate'));
 
 // 啟動排位配對 (優先配對線上真人，計時增加)
 function startMatchmaking() {
@@ -714,5 +794,5 @@ function bindMobileControls() {
   });
 }
 
-// 進入頁面立即啟動配對！
-startMatchmaking();
+// 進入頁面依據 URL 參數模式初始化 (play 或 spectate)
+switchTab(currentTab);

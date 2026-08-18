@@ -448,16 +448,18 @@
       <div style="width: 38px;"></div>
     </div>
 
-    <!-- 雷達配對動畫 -->
-    <div class="radar-box">
-      <div class="radar-circle"></div>
-      <div class="radar-circle"></div>
-      <div class="radar-circle"></div>
-      <div class="radar-center-icon">🏸</div>
+    <!-- 頂部模式切換 Tab -->
+    <div style="display:flex; background:rgba(0,0,0,0.06); border-radius:14px; padding:4px; margin-bottom:14px; gap:6px;">
+      <button id="tab-play-mode" style="flex:1; border:none; border-radius:10px; padding:10px; font-size:13px; font-weight:800; background:#8b5cf6; color:white; cursor:pointer; transition:all 0.2s; box-shadow:0 2px 8px rgba(139,92,246,0.3);">
+        ⚔️ 尋找對手 (配對)
+      </button>
+      <button id="tab-spectate-mode" style="flex:1; border:none; border-radius:10px; padding:10px; font-size:13px; font-weight:800; background:transparent; color:var(--text-secondary); cursor:pointer; transition:all 0.2s;">
+        👀 賽事觀戰大廳
+      </button>
     </div>
 
     <!-- 即時在線狀態統計 -->
-    <div style="display:flex; justify-content:center; gap:8px; margin-bottom:12px; flex-wrap:wrap;">
+    <div style="display:flex; justify-content:center; gap:8px; margin-bottom:14px; flex-wrap:wrap;">
       <span style="background:rgba(239,68,68,0.2); border:1px solid rgba(254,202,202,0.3); border-radius:12px; padding:4px 12px; font-size:12px; font-weight:800; color:#f87171;">
         🔥 <span id="stat-battling-count">0</span> 人對戰中
       </span>
@@ -466,32 +468,43 @@
       </span>
     </div>
 
-    <div id="match-status-text" style="font-size: 16px; font-weight: 900; color: #8b5cf6; margin-bottom: 4px;">
-      正在搜尋線上真人對手...
-    </div>
-    <div id="match-timer-badge" style="font-size: 13px; font-weight: 700; color: #f59e0b; margin-bottom: 12px;">
-      ⏳ 真人配對中 · 已搜尋 <span id="queue-timer" style="font-family:monospace; font-size:14px; color:#d97706; font-weight:800;">00:00</span>
-    </div>
-
-    <!-- 選手對戰卡片 -->
-    <div class="vs-card-container animate-scaleIn">
-      <div class="player-side">
-        <div class="player-side-avatar" id="my-avatar">👦</div>
-        <div class="player-side-name" id="my-name">玩家</div>
-        <div class="player-side-pts" id="my-pts">0 pts</div>
+    <!-- 配對中專屬區塊 (雷達 + 選手卡 + 計時) -->
+    <div id="match-active-panel">
+      <!-- 雷達配對動畫 -->
+      <div class="radar-box">
+        <div class="radar-circle"></div>
+        <div class="radar-circle"></div>
+        <div class="radar-circle"></div>
+        <div class="radar-center-icon">🏸</div>
       </div>
 
-      <div class="vs-badge">VS</div>
+      <div id="match-status-text" style="font-size: 16px; font-weight: 900; color: #8b5cf6; margin-bottom: 4px;">
+        正在搜尋線上真人對手...
+      </div>
+      <div id="match-timer-badge" style="font-size: 13px; font-weight: 700; color: #f59e0b; margin-bottom: 12px;">
+        ⏳ 真人配對中 · 已搜尋 <span id="queue-timer" style="font-family:monospace; font-size:14px; color:#d97706; font-weight:800;">00:00</span>
+      </div>
 
-      <div class="player-side">
-        <div class="player-side-avatar" id="opp-avatar">❓</div>
-        <div class="player-side-name" id="opp-name" style="color:var(--text-secondary);">搜尋對手中...</div>
-        <div class="player-side-pts" id="opp-pts">- pts</div>
+      <!-- 選手對戰卡片 -->
+      <div class="vs-card-container animate-scaleIn">
+        <div class="player-side">
+          <div class="player-side-avatar" id="my-avatar">👦</div>
+          <div class="player-side-name" id="my-name">玩家</div>
+          <div class="player-side-pts" id="my-pts">0 pts</div>
+        </div>
+
+        <div class="vs-badge">VS</div>
+
+        <div class="player-side">
+          <div class="player-side-avatar" id="opp-avatar">❓</div>
+          <div class="player-side-name" id="opp-name" style="color:var(--text-secondary);">搜尋對手中...</div>
+          <div class="player-side-pts" id="opp-pts">- pts</div>
+        </div>
       </div>
     </div>
 
     <!-- 正在進行中的真人對戰 (即時觀戰列表) -->
-    <div class="rule-card animate-fadeInUp" style="border: 1.5px solid rgba(139, 92, 246, 0.4); background: linear-gradient(135deg, rgba(255,255,255,0.95), rgba(245,243,255,0.95));">
+    <div class="rule-card animate-fadeInUp" id="live-matches-card" style="border: 1.5px solid rgba(139, 92, 246, 0.4); background: linear-gradient(135deg, rgba(255,255,255,0.95), rgba(245,243,255,0.95));">
       <div class="rule-title" style="color:#7c3aed; justify-content:space-between; display:flex; align-items:center;">
         <span style="display:flex; align-items:center; gap:6px;">
           <span>🔴</span> 正在激戰中的房間 (LIVE 觀戰)
