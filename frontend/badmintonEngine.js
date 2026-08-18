@@ -573,6 +573,46 @@ export class BadmintonEngine {
     this.ctx.restore();
   }
 
+  updateSmoothPositions() {
+    if (!this.isMultiplayer) return;
+
+    const p1 = this.pikaPhysics.player1;
+    const p2 = this.pikaPhysics.player2;
+    const b = this.pikaPhysics.ball;
+
+    // 確保 smooth 結構存在
+    if (!this.smoothP1) this.smoothP1 = { x: p1.x || 36, y: p1.y || 244 };
+    if (!this.smoothP2) this.smoothP2 = { x: p2.x || 396, y: p2.y || 244 };
+    if (!this.smoothBall) this.smoothBall = { x: b.x || 56, y: b.y || 100 };
+
+    const targetP1X = Number.isFinite(p1.x) ? p1.x : 36;
+    const targetP1Y = Number.isFinite(p1.y) ? p1.y : 244;
+    const targetP2X = Number.isFinite(p2.x) ? p2.x : 396;
+    const targetP2Y = Number.isFinite(p2.y) ? p2.y : 244;
+    const targetBallX = Number.isFinite(b.x) ? b.x : 56;
+    const targetBallY = Number.isFinite(b.y) ? b.y : 100;
+
+    // 皮卡丘平滑漸進 (大於 70px 瞬移時直接重置，否則 0.52 Lerp 極速滑順)
+    if (Math.abs(this.smoothP1.x - targetP1X) > 70) this.smoothP1.x = targetP1X;
+    else this.smoothP1.x += (targetP1X - this.smoothP1.x) * 0.52;
+
+    if (Math.abs(this.smoothP1.y - targetP1Y) > 70) this.smoothP1.y = targetP1Y;
+    else this.smoothP1.y += (targetP1Y - this.smoothP1.y) * 0.52;
+
+    if (Math.abs(this.smoothP2.x - targetP2X) > 70) this.smoothP2.x = targetP2X;
+    else this.smoothP2.x += (targetP2X - this.smoothP2.x) * 0.52;
+
+    if (Math.abs(this.smoothP2.y - targetP2Y) > 70) this.smoothP2.y = targetP2Y;
+    else this.smoothP2.y += (targetP2Y - this.smoothP2.y) * 0.52;
+
+    // 羽毛球平滑漸進 (0.62 Lerp + 平滑補間)
+    if (Math.abs(this.smoothBall.x - targetBallX) > 90) this.smoothBall.x = targetBallX;
+    else this.smoothBall.x += (targetBallX - this.smoothBall.x) * 0.62;
+
+    if (Math.abs(this.smoothBall.y - targetBallY) > 90) this.smoothBall.y = targetBallY;
+    else this.smoothBall.y += (targetBallY - this.smoothBall.y) * 0.62;
+  }
+
   drawTiledSprite(name, rectX, rectY, rectW, rectH) {
     if (!this.spriteLoaded) return;
     const frameData = this.spriteData[name];
@@ -662,12 +702,13 @@ export class BadmintonEngine {
     const p2 = this.pikaPhysics.player2;
     const b = this.pikaPhysics.ball;
 
-    const p1X = Number.isFinite(p1.x) ? p1.x : 36;
-    const p1Y = Number.isFinite(p1.y) ? p1.y : 244;
-    const p2X = Number.isFinite(p2.x) ? p2.x : 396;
-    const p2Y = Number.isFinite(p2.y) ? p2.y : 244;
-    const bX = Number.isFinite(b.x) ? b.x : 56;
-    const bY = Number.isFinite(b.y) ? b.y : 100;
+    const isSmooth = this.isMultiplayer && (this.multiplayerRole === 'firebase' || this.multiplayerRole === 'cloud' || this.multiplayerRole === 'guest');
+    const p1X = isSmooth && this.smoothP1 ? this.smoothP1.x : (Number.isFinite(p1.x) ? p1.x : 36);
+    const p1Y = isSmooth && this.smoothP1 ? this.smoothP1.y : (Number.isFinite(p1.y) ? p1.y : 244);
+    const p2X = isSmooth && this.smoothP2 ? this.smoothP2.x : (Number.isFinite(p2.x) ? p2.x : 396);
+    const p2Y = isSmooth && this.smoothP2 ? this.smoothP2.y : (Number.isFinite(p2.y) ? p2.y : 244);
+    const bX  = isSmooth && this.smoothBall ? this.smoothBall.x : (Number.isFinite(b.x) ? b.x : 56);
+    const bY  = isSmooth && this.smoothBall ? this.smoothBall.y : (Number.isFinite(b.y) ? b.y : 100);
 
     // 玩家陰影 (隨跳躍高度動態縮放)
     const p1HeightAboveGround = Math.max(0, 244 - p1Y);
@@ -780,6 +821,9 @@ export class BadmintonEngine {
       this.update();
       this.accumulator -= fixedTimeStep;
     }
+
+    // 每一幀進行 60 FPS 平滑補間插值 (Lerp)
+    this.updateSmoothPositions();
 
     this.draw();
     requestAnimationFrame(this.loop);
