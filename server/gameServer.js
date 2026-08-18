@@ -74,19 +74,25 @@ function startServerRoomSimulation(roomId, roomData) {
   // 標記此房間由雲端伺服器權威託管 (兩端玩家均不需當主機)
   update(ref(db, `rankedRooms/${roomId}`), { serverHost: true }).catch(() => {});
 
-  // 監聽 1P 輸入
+  // 監聽 1P 輸入 (Host 玩家，寫到 p1Input)
   const unsubsP1 = onValue(ref(db, `rankedRooms/${roomId}/p1Input`), (snap) => {
     const inp = snap.val();
     if (inp) roomState.p1Raw = { ...inp };
   });
 
-  // 監聽 2P 輸入
-  const unsubsP2 = onValue(ref(db, `rankedRooms/${roomId}/guestInput`), (snap) => {
+  // 監聽 2P 輸入 (Guest 玩家，寫到 p2Input)
+  const unsubsP2 = onValue(ref(db, `rankedRooms/${roomId}/p2Input`), (snap) => {
     const inp = snap.val();
     if (inp) roomState.p2Raw = { ...inp };
   });
 
-  roomState.unsubs = [unsubsP1, unsubsP2];
+  // 同時兼容舊版 guestInput key
+  const unsubsP2Legacy = onValue(ref(db, `rankedRooms/${roomId}/guestInput`), (snap) => {
+    const inp = snap.val();
+    if (inp) roomState.p2Raw = { ...inp };
+  });
+
+  roomState.unsubs = [unsubsP1, unsubsP2, unsubsP2Legacy];
 
   // 30 FPS 物理循環 (33.33ms)
   roomState.loopTimer = setInterval(() => {
@@ -144,7 +150,7 @@ function startServerRoomSimulation(roomId, roomData) {
 
       if (roomState.s1 >= roomState.maxScore || roomState.s2 >= roomState.maxScore) {
         roomState.roundState = 'game_over';
-        set(ref(db, `rankedRooms/${roomId}/state`), {
+        const finalState = {
           p1: { x: p1.x, y: p1.y, state: p1.state, frameNumber: p1.frameNumber, divingDirection: p1.divingDirection },
           p2: { x: p2.x, y: p2.y, state: p2.state, frameNumber: p2.frameNumber, divingDirection: p2.divingDirection },
           b: { x: b.x, y: b.y, vx: b.xVelocity, vy: b.yVelocity, rot: b.rotation, power: b.isPowerHit },
@@ -152,7 +158,10 @@ function startServerRoomSimulation(roomId, roomData) {
           s2: roomState.s2,
           round: 'game_over',
           punch: punchEvent
-        }).catch(() => {});
+        };
+        set(ref(db, `rankedRooms/${roomId}/state`), finalState).catch(() => {});
+        // 標記房間結束
+        update(ref(db, `rankedRooms/${roomId}`), { status: 'finished' }).catch(() => {});
         stopServerRoomSimulation(roomId);
         return;
       } else {

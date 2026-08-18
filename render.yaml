@@ -1,0 +1,15 @@
+services:
+  - type: web
+    name: tonykay-badminton-server
+    env: node
+    rootDir: server
+    buildCommand: npm install
+    startCommand: node gameServer.js
+    plan: free
+    autoDeploy: true
+    healthCheckPath: /
+    envVars:
+      - key: PORT
+        value: 8080
+      - key: NODE_ENV
+        value: production
