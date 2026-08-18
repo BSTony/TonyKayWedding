@@ -495,7 +495,7 @@ function processCollisionBetweenBallAndWorldAndSetBallPosition(ball) {
  * @param {Player} theOtherPlayer
  * @param {Ball} ball
  */
-function processPlayerMovementAndSetPlayerPosition(
+export function processPlayerMovementAndSetPlayerPosition(
   player,
   userInput,
   theOtherPlayer,

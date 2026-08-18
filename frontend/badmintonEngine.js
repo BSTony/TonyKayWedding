@@ -1,4 +1,4 @@
-import { PikaPhysics, PikaUserInput } from './physics.js';
+import { PikaPhysics, PikaUserInput, processPlayerMovementAndSetPlayerPosition } from './physics.js';
 
 /**
  * Pikachu Volleyball Engine - 高畫質婚禮復刻版 (KAY & TONY WEDDING)
@@ -242,20 +242,61 @@ export class BadmintonEngine {
     const p2 = this.pikaPhysics.player2;
     const b = this.pikaPhysics.ball;
 
+    const isPredicted = (this.multiplayerRole === 'firebase' || this.multiplayerRole === 'cloud' || this.multiplayerRole === 'guest');
+    const isP1 = (this.cloudRole === 'p1');
+    const isP2 = (this.cloudRole === 'p2');
+
+    // 1. 同步 P1
     if (state.p1) {
-      p1.x = state.p1.x;
-      p1.y = state.p1.y;
-      p1.state = state.p1.s !== undefined ? state.p1.s : state.p1.state;
-      p1.frameNumber = state.p1.f !== undefined ? state.p1.f : state.p1.frameNumber;
+      if (isPredicted && isP1) {
+        // 本地是 P1：客戶端預測優先，伺服器柔和校準
+        const diffX = Math.abs(p1.x - state.p1.x);
+        const diffY = Math.abs(p1.y - state.p1.y);
+        if (diffX > 45 || diffY > 45 || this.roundState !== 'playing') {
+          p1.x = state.p1.x;
+          p1.y = state.p1.y;
+          p1.state = state.p1.s !== undefined ? state.p1.s : state.p1.state;
+          p1.frameNumber = state.p1.f !== undefined ? state.p1.f : state.p1.frameNumber;
+        } else {
+          p1.x += (state.p1.x - p1.x) * 0.2;
+          p1.y += (state.p1.y - p1.y) * 0.2;
+        }
+      } else {
+        // 本地是 P2 或觀戰：P1 是遠端對手，100% 聽從伺服器
+        p1.x = state.p1.x;
+        p1.y = state.p1.y;
+        p1.state = state.p1.s !== undefined ? state.p1.s : state.p1.state;
+        p1.frameNumber = state.p1.f !== undefined ? state.p1.f : state.p1.frameNumber;
+      }
       p1.divingDirection = state.p1.d !== undefined ? state.p1.d : (state.p1.divingDirection || 1);
     }
+
+    // 2. 同步 P2
     if (state.p2) {
-      p2.x = state.p2.x;
-      p2.y = state.p2.y;
-      p2.state = state.p2.s !== undefined ? state.p2.s : state.p2.state;
-      p2.frameNumber = state.p2.f !== undefined ? state.p2.f : state.p2.frameNumber;
+      if (isPredicted && isP2) {
+        // 本地是 P2：客戶端預測優先，伺服器柔和校準
+        const diffX = Math.abs(p2.x - state.p2.x);
+        const diffY = Math.abs(p2.y - state.p2.y);
+        if (diffX > 45 || diffY > 45 || this.roundState !== 'playing') {
+          p2.x = state.p2.x;
+          p2.y = state.p2.y;
+          p2.state = state.p2.s !== undefined ? state.p2.s : state.p2.state;
+          p2.frameNumber = state.p2.f !== undefined ? state.p2.f : state.p2.frameNumber;
+        } else {
+          p2.x += (state.p2.x - p2.x) * 0.2;
+          p2.y += (state.p2.y - p2.y) * 0.2;
+        }
+      } else {
+        // 本地是 P1 或觀戰：P2 是遠端對手，100% 聽從伺服器
+        p2.x = state.p2.x;
+        p2.y = state.p2.y;
+        p2.state = state.p2.s !== undefined ? state.p2.s : state.p2.state;
+        p2.frameNumber = state.p2.f !== undefined ? state.p2.f : state.p2.frameNumber;
+      }
       p2.divingDirection = state.p2.d !== undefined ? state.p2.d : (state.p2.divingDirection || -1);
     }
+
+    // 3. 同步排球 (權威伺服器裁定)
     if (state.b) {
       b.x = state.b.x;
       b.y = state.b.y;
@@ -346,67 +387,58 @@ export class BadmintonEngine {
 
     const now = performance.now();
 
-    // ── Firebase 純客戶端模式：只送輸入，完全不做物理計算，渲染由 receiveRemoteState 驅動 ──
-    if (this.multiplayerRole === 'firebase') {
-      if (this.onSendInput) {
-        const hit = this.powerHitBuffer > 0 ? 1 : 0;
-        const currentInputKey = `${this.keys.left},${this.keys.right},${this.keys.up},${this.keys.down},${hit}`;
-        if (now - this.lastInputSendTime > 30 || currentInputKey !== this.lastSentInputKey || hit) {
-          this.lastInputSendTime = now;
-          this.lastSentInputKey = currentInputKey;
-          if (hit && this.powerHitBuffer > 0) this.powerHitBuffer--;
-          this.onSendInput({
-            left: !!this.keys.left,
-            right: !!this.keys.right,
-            up: !!this.keys.up,
-            down: !!this.keys.down,
-            powerHit: hit
-          });
-        }
-      }
-      return; // 不做任何物理計算
-    }
+    // ── 客戶端多人連線模式 (Firebase / 雲端 WebSocket) ──
+    if (this.multiplayerRole === 'firebase' || this.multiplayerRole === 'cloud' || this.multiplayerRole === 'guest') {
+      const hit = this.powerHitBuffer > 0 ? 1 : 0;
+      const currentInputKey = `${this.keys.left},${this.keys.right},${this.keys.up},${this.keys.down},${hit}`;
 
-    // ── 雲端 WebSocket 模式 (備用) ──
-    if (this.multiplayerRole === 'cloud') {
-      if (this.ws && this.ws.readyState === WebSocket.OPEN) {
-        const hit = this.powerHitBuffer > 0 ? 1 : 0;
-        const currentInputKey = `${this.keys.left},${this.keys.right},${this.keys.up},${this.keys.down},${hit}`;
-        if (now - this.lastInputSendTime > 30 || currentInputKey !== this.lastSentInputKey || hit) {
-          this.lastInputSendTime = now;
-          this.lastSentInputKey = currentInputKey;
+      // 1. 發送指令給伺服器 (按鍵變動時立即送出，否則以 30ms 節流)
+      if (now - this.lastInputSendTime > 30 || currentInputKey !== this.lastSentInputKey || hit) {
+        this.lastInputSendTime = now;
+        this.lastSentInputKey = currentInputKey;
+        if (hit && this.powerHitBuffer > 0) this.powerHitBuffer--;
+
+        const inputPayload = {
+          left: !!this.keys.left,
+          right: !!this.keys.right,
+          up: !!this.keys.up,
+          down: !!this.keys.down,
+          powerHit: hit
+        };
+
+        if (this.onSendInput) this.onSendInput(inputPayload);
+        if (this.ws && this.ws.readyState === WebSocket.OPEN) {
           this.ws.send(JSON.stringify({
             type: 'input',
             role: this.cloudRole,
-            input: {
-              left: !!this.keys.left,
-              right: !!this.keys.right,
-              up: !!this.keys.up,
-              down: !!this.keys.down,
-              powerHit: hit
-            }
+            input: inputPayload
           }));
         }
       }
-      return;
-    }
 
-    // ── Guest 模式：發送本地即時搖桿指令給 Host 主機 (舊架構備用) ──
-    if (this.multiplayerRole === 'guest') {
-      if (this.onSendInput) {
-        const hit = this.powerHitBuffer > 0 ? 1 : 0;
-        const currentInputKey = `${this.keys.left},${this.keys.right},${this.keys.up},${this.keys.down},${hit}`;
-        if (now - this.lastInputSendTime > 30 || currentInputKey !== this.lastSentInputKey || hit) {
-          this.lastInputSendTime = now;
-          this.lastSentInputKey = currentInputKey;
-          this.onSendInput({
-            left: !!this.keys.left,
-            right: !!this.keys.right,
-            up: !!this.keys.up,
-            down: !!this.keys.down,
-            powerHit: hit
-          });
+      // 2. 🌟 客戶端 0ms 即時預測響應 (Client-Side Input Prediction)
+      //    按下按鍵時本地立即運算本人皮卡丘的物理移動與跳躍，手感達到 0 延遲原生級即時！
+      if (this.roundState === 'playing') {
+        const isP1 = (this.cloudRole === 'p1');
+        const myPlayer = isP1 ? this.pikaPhysics.player1 : this.pikaPhysics.player2;
+        const otherPlayer = isP1 ? this.pikaPhysics.player2 : this.pikaPhysics.player1;
+
+        const myInput = new PikaUserInput();
+        if (this.keys.left)  myInput.xDirection = -1;
+        if (this.keys.right) myInput.xDirection = 1;
+        if (this.keys.up)    myInput.yDirection = -1;
+        if (this.keys.down)  myInput.yDirection = 1;
+        myInput.powerHit = hit;
+        if (hit && myPlayer.state === 0 && myInput.yDirection === 1 && myInput.xDirection === 0) {
+          myInput.xDirection = isP1 ? 1 : -1;
         }
+
+        processPlayerMovementAndSetPlayerPosition(
+          myPlayer,
+          myInput,
+          otherPlayer,
+          this.pikaPhysics.ball
+        );
       }
       return;
     }
