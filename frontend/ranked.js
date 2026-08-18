@@ -67,6 +67,9 @@ let queueRef = null;
 let matchFound = false;
 let elapsedTimer = null;
 let elapsedSeconds = 0;
+let isSpectating = false;
+let spectatorUnsubs = [];
+let activeSpectatedRoomId = null;
 
 function formatTime(sec) {
   const m = String(Math.floor(sec / 60)).padStart(2, '0');
@@ -74,12 +77,197 @@ function formatTime(sec) {
   return `${m}:${s}`;
 }
 
+// ── 即時監聽排隊人數與對戰中房間 ──
+onValue(ref(db, 'rankedQueue'), snap => {
+  const q = snap.val() || {};
+  const count = Object.keys(q).length;
+  const el = document.getElementById('stat-queue-count');
+  if (el) el.textContent = count;
+});
+
+onValue(ref(db, 'rankedRooms'), snap => {
+  const rooms = snap.val() || {};
+  const now = Date.now();
+  const activeRooms = [];
+  for (const rId in rooms) {
+    const r = rooms[rId];
+    if (r && r.status === 'playing' && !r.abandoned && r.createdAt && (now - r.createdAt < 5 * 60 * 1000)) {
+      activeRooms.push({ id: rId, ...r });
+    }
+  }
+
+  const battlingEl = document.getElementById('stat-battling-count');
+  if (battlingEl) battlingEl.textContent = activeRooms.length * 2;
+
+  const badgeEl = document.getElementById('live-matches-count-badge');
+  if (badgeEl) badgeEl.textContent = `${activeRooms.length} 場`;
+
+  renderLiveMatchesList(activeRooms);
+});
+
+function renderLiveMatchesList(activeRooms) {
+  const container = document.getElementById('live-matches-container');
+  if (!container) return;
+
+  if (activeRooms.length === 0) {
+    container.innerHTML = `<div style="text-align:center; padding:12px 0; color:var(--text-secondary); font-size:12px;">目前暫無進行中的真人對戰，歡迎配對開戰！</div>`;
+    return;
+  }
+
+  container.innerHTML = activeRooms.map(room => {
+    const p1 = room.host || { nickname: '1P', points: 0 };
+    const p2 = room.guest || { nickname: '2P', points: 0 };
+    const s1 = room.state?.s1 || 0;
+    const s2 = room.state?.s2 || 0;
+    const specCount = Object.keys(room.spectators || {}).length;
+
+    return `
+      <div style="background:white; border:1px solid #ddd6fe; border-radius:12px; padding:10px 14px; display:flex; align-items:center; justify-content:space-between; box-shadow:0 2px 8px rgba(139,92,246,0.08); gap:8px;">
+        <div style="flex:1; min-width:0;">
+          <div style="font-size:13px; font-weight:800; color:#1e1b4b; display:flex; align-items:center; gap:6px; flex-wrap:wrap;">
+            <span style="max-width:90px; overflow:hidden; text-overflow:ellipsis; white-space:nowrap;">${p1.nickname || '1P'}</span>
+            <span style="font-size:10px; color:#7c3aed; background:#ede9fe; padding:1px 5px; border-radius:6px;">${p1.points || 0} pts</span>
+            <span style="font-size:11px; font-weight:900; color:#ef4444;">VS</span>
+            <span style="max-width:90px; overflow:hidden; text-overflow:ellipsis; white-space:nowrap;">${p2.nickname || '2P'}</span>
+            <span style="font-size:10px; color:#7c3aed; background:#ede9fe; padding:1px 5px; border-radius:6px;">${p2.points || 0} pts</span>
+          </div>
+          <div style="font-size:11px; color:#64748b; margin-top:3px; display:flex; align-items:center; gap:10px;">
+            <span style="color:#ef4444; font-weight:800;">🔴 即時比分: ${s1} - ${s2}</span>
+            <span>👀 ${specCount} 人在看</span>
+          </div>
+        </div>
+        <button class="btn-spectate-action" data-room-id="${room.id}" style="background:linear-gradient(135deg, #8b5cf6, #6d28d9); color:white; border:none; border-radius:10px; padding:8px 12px; font-size:12px; font-weight:800; cursor:pointer; box-shadow:0 2px 6px rgba(139,92,246,0.3); white-space:nowrap;">
+          👀 觀戰
+        </button>
+      </div>
+    `;
+  }).join('');
+
+  container.querySelectorAll('.btn-spectate-action').forEach(btn => {
+    btn.addEventListener('click', () => {
+      const rId = btn.getAttribute('data-room-id');
+      const targetRoom = activeRooms.find(r => r.id === rId);
+      if (targetRoom) {
+        startSpectating(rId, targetRoom);
+      }
+    });
+  });
+}
+
+function startSpectating(roomId, roomData) {
+  if (queueRef) {
+    remove(queueRef).catch(() => {});
+    queueRef = null;
+  }
+  if (elapsedTimer) clearInterval(elapsedTimer);
+
+  isSpectating = true;
+  activeSpectatedRoomId = roomId;
+  matchEnded = false;
+
+  matchingView.style.display = 'none';
+  arenaView.style.display = 'block';
+
+  // 隱藏手把，顯示觀戰頂欄
+  const ctrl = document.getElementById('arena-controls');
+  if (ctrl) ctrl.style.display = 'none';
+
+  const hudText = document.getElementById('arena-hud-text');
+  if (hudText) hudText.style.display = 'none';
+
+  const specBanner = document.getElementById('spectator-banner');
+  if (specBanner) specBanner.style.display = 'flex';
+
+  arenaP1Name.textContent = `${roomData.host?.nickname || '1P'} (${roomData.host?.points || 0} pts)`;
+  arenaP2Name.textContent = `${roomData.guest?.nickname || '2P'} (${roomData.guest?.points || 0} pts)`;
+  arenaP1Score.textContent = roomData.state?.s1 || '0';
+  arenaP2Score.textContent = roomData.state?.s2 || '0';
+
+  if (gameEngine) gameEngine.stop();
+  gameEngine = new BadmintonEngine('game-canvas');
+  setGlobalEngine(gameEngine);
+  gameEngine.startFirebaseClient('spectate', null, roomData.maxScore || 5);
+
+  // 登記觀戰者
+  const mySpecRef = ref(db, `rankedRooms/${roomId}/spectators/${uid}`);
+  set(mySpecRef, { name: nickname, avatar: myAvatarEl.textContent }).catch(() => {});
+  onDisconnect(mySpecRef).remove().catch(() => {});
+
+  // 監聽觀戰人數
+  spectatorUnsubs.push(onValue(ref(db, `rankedRooms/${roomId}/spectators`), snap => {
+    const specs = snap.val() || {};
+    const countEl = document.getElementById('spectator-live-count');
+    if (countEl) countEl.textContent = Math.max(1, Object.keys(specs).length);
+  }));
+
+  // 監聽賽事狀態
+  spectatorUnsubs.push(onValue(ref(db, `rankedRooms/${roomId}/state`), snap => {
+    const st = snap.val();
+    if (st && gameEngine) {
+      gameEngine.receiveRemoteState(st);
+      arenaP1Score.textContent = st.s1 || 0;
+      arenaP2Score.textContent = st.s2 || 0;
+
+      if (st.round === 'game_over' || (st.s1 >= (roomData.maxScore || 5)) || (st.s2 >= (roomData.maxScore || 5))) {
+        const winnerName = (st.s1 > st.s2) ? (roomData.host?.nickname || '1P') : (roomData.guest?.nickname || '2P');
+        const specModal = document.getElementById('spectator-modal');
+        const specDesc = document.getElementById('spec-modal-desc');
+        if (specDesc) specDesc.textContent = `玩家【${winnerName}】以 ${st.s1 || 0} : ${st.s2 || 0} 贏得排位賽勝利！`;
+        if (specModal) specModal.style.display = 'flex';
+      }
+    }
+  }));
+
+  // 監聽中途退出
+  spectatorUnsubs.push(onValue(ref(db, `rankedRooms/${roomId}/abandoned`), snap => {
+    const ab = snap.val();
+    if (ab) {
+      const specModal = document.getElementById('spectator-modal');
+      const specDesc = document.getElementById('spec-modal-desc');
+      if (specDesc) specDesc.textContent = `玩家【${ab.name || '對手'}】已中途離開，本局比賽結束！`;
+      if (specModal) specModal.style.display = 'flex';
+    }
+  }));
+}
+
+function stopSpectating() {
+  if (activeSpectatedRoomId) {
+    remove(ref(db, `rankedRooms/${activeSpectatedRoomId}/spectators/${uid}`)).catch(() => {});
+    activeSpectatedRoomId = null;
+  }
+
+  spectatorUnsubs.forEach(u => typeof u === 'function' && u());
+  spectatorUnsubs = [];
+
+  if (gameEngine) gameEngine.stop();
+  isSpectating = false;
+
+  const specModal = document.getElementById('spectator-modal');
+  if (specModal) specModal.style.display = 'none';
+
+  const specBanner = document.getElementById('spectator-banner');
+  if (specBanner) specBanner.style.display = 'none';
+
+  const ctrl = document.getElementById('arena-controls');
+  if (ctrl) ctrl.style.display = 'flex';
+
+  const hudText = document.getElementById('arena-hud-text');
+  if (hudText) hudText.style.display = 'block';
+
+  startMatchmaking();
+}
+
+// 綁定退出觀戰按鈕
+document.getElementById('btn-exit-spectate')?.addEventListener('click', stopSpectating);
+document.getElementById('btn-spec-modal-close')?.addEventListener('click', stopSpectating);
+
 // 啟動排位配對 (優先配對線上真人，計時增加)
 function startMatchmaking() {
   matchingView.style.display = 'block';
   arenaView.style.display = 'none';
   matchModal.style.display = 'none';
   matchFound = false;
+  isSpectating = false;
   elapsedSeconds = 0;
 
   if (elapsedTimer) clearInterval(elapsedTimer);
@@ -112,7 +300,7 @@ function startMatchmaking() {
 
     // 2. 監聽自身是否被其他玩家配對
     onValue(queueRef, (snap) => {
-      if (matchFound) return;
+      if (matchFound || isSpectating) return;
       const data = snap.val();
       if (data && data.matchedWith) {
         matchFound = true;
@@ -123,7 +311,7 @@ function startMatchmaking() {
 
     // 3. 主動尋找隊列中其他等待中的玩家
     onValue(ref(db, 'rankedQueue'), (snap) => {
-      if (matchFound) return;
+      if (matchFound || isSpectating) return;
       const allQueue = snap.val() || {};
       for (const otherKey in allQueue) {
         if (otherKey !== queueKey) {
@@ -164,7 +352,7 @@ function startMatchmaking() {
   const btnPlayAi = document.getElementById('btn-play-ai');
   if (btnPlayAi) {
     btnPlayAi.onclick = () => {
-      if (!matchFound) {
+      if (!matchFound && !isSpectating) {
         matchFound = true;
         if (elapsedTimer) clearInterval(elapsedTimer);
         if (queueRef) remove(queueRef).catch(() => {});
@@ -405,6 +593,10 @@ function handleRankedGameOver(playerWon) {
 
 // 退出賽場返回大廳 (若比賽進行中離開，通知對手中止並取消本局)
 document.getElementById('btn-exit-arena').addEventListener('click', () => {
+  if (isSpectating) {
+    stopSpectating();
+    return;
+  }
   if (!matchEnded && currentRoomId) {
     set(ref(db, 'rankedRooms/' + currentRoomId + '/abandoned'), { by: uid, name: nickname }).catch(() => {});
   }

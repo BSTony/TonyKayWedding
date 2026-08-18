@@ -456,6 +456,16 @@
       <div class="radar-center-icon">🏸</div>
     </div>
 
+    <!-- 即時在線狀態統計 -->
+    <div style="display:flex; justify-content:center; gap:8px; margin-bottom:12px; flex-wrap:wrap;">
+      <span style="background:rgba(239,68,68,0.2); border:1px solid rgba(254,202,202,0.3); border-radius:12px; padding:4px 12px; font-size:12px; font-weight:800; color:#f87171;">
+        🔥 <span id="stat-battling-count">0</span> 人對戰中
+      </span>
+      <span style="background:rgba(59,130,246,0.2); border:1px solid rgba(191,219,254,0.3); border-radius:12px; padding:4px 12px; font-size:12px; font-weight:800; color:#60a5fa;">
+        ⏳ <span id="stat-queue-count">0</span> 人排隊中
+      </span>
+    </div>
+
     <div id="match-status-text" style="font-size: 16px; font-weight: 900; color: #8b5cf6; margin-bottom: 4px;">
       正在搜尋線上真人對手...
     </div>
@@ -477,6 +487,21 @@
         <div class="player-side-avatar" id="opp-avatar">❓</div>
         <div class="player-side-name" id="opp-name" style="color:var(--text-secondary);">搜尋對手中...</div>
         <div class="player-side-pts" id="opp-pts">- pts</div>
+      </div>
+    </div>
+
+    <!-- 正在進行中的真人對戰 (即時觀戰列表) -->
+    <div class="rule-card animate-fadeInUp" style="border: 1.5px solid rgba(139, 92, 246, 0.4); background: linear-gradient(135deg, rgba(255,255,255,0.95), rgba(245,243,255,0.95));">
+      <div class="rule-title" style="color:#7c3aed; justify-content:space-between; display:flex; align-items:center;">
+        <span style="display:flex; align-items:center; gap:6px;">
+          <span>🔴</span> 正在激戰中的房間 (LIVE 觀戰)
+        </span>
+        <span id="live-matches-count-badge" style="font-size:11px; background:#7c3aed; color:white; padding:2px 8px; border-radius:10px; font-weight:800;">0 場</span>
+      </div>
+      <div id="live-matches-container" style="display:flex; flex-direction:column; gap:8px; margin-top:8px;">
+        <div style="text-align:center; padding:12px 0; color:var(--text-secondary); font-size:12px;">
+          目前暫無進行中的真人對戰，歡迎配對開戰！
+        </div>
       </div>
     </div>
 
@@ -518,8 +543,18 @@
       <button class="header-btn" id="btn-exit-arena" style="position: absolute; top: 12px; left: 12px; z-index: 40; color:white; background:rgba(0,0,0,0.6);">🔙</button>
 
       <!-- 排位 HUD -->
-      <div class="arena-hud">
+      <div class="arena-hud" id="arena-hud-text">
         🥇 巔峰排位賽 · 5 分制決鬥
+      </div>
+
+      <!-- 觀戰專屬橫幅 (觀戰模式時顯示) -->
+      <div id="spectator-banner" style="display:none; position:absolute; top:max(10px, env(safe-area-inset-top, 10px)); left:50%; transform:translateX(-50%); z-index:45; background:rgba(15,23,42,0.95); border:1.5px solid #a855f7; border-radius:20px; padding:6px 16px; font-size:12px; font-weight:800; color:#f3e8ff; box-shadow:0 0 16px rgba(168,85,247,0.5); align-items:center; gap:10px; white-space:nowrap;">
+        <span>🔴 LIVE 觀戰中</span>
+        <span style="color:#64748b;">·</span>
+        <span>👀 <span id="spectator-live-count">1</span> 人在看</span>
+        <button id="btn-exit-spectate" style="background:#dc2626; color:white; border:none; border-radius:12px; padding:3px 10px; font-size:11px; font-weight:800; cursor:pointer;">
+          🚪 退出觀戰
+        </button>
       </div>
 
       <!-- 畫布容器 -->
@@ -538,7 +573,7 @@
       </div>
 
       <!-- 實體鍵盤風格手把 (左手 WASD 箭頭鍵盤 ＋ 右手動作鍵盤) -->
-      <div class="controls">
+      <div class="controls" id="arena-controls">
         <!-- 左手：鍵盤方向鍵區 (上排 ▲，下排 ◀ ▼ ▶ 同一水平線！) -->
         <div class="keyboard-cluster" id="keyboard-cluster">
           <div class="keycap-row">
@@ -563,14 +598,16 @@
           </div>
         </div>
 
-        <!-- 右手：鍵盤動作按鈕 (跳躍 Jump ＋ 殺球 Hit) -->
+        <!-- 右手：動作鍵盤區 -->
         <div class="keycap-action-group">
-          <button class="keycap-btn keycap-action-btn keycap-jump" id="btn-jump" aria-label="跳躍">
+          <!-- 跳躍鍵 -->
+          <button class="keycap-btn keycap-action-btn keycap-jump" id="btn-jump" aria-label="跳躍 (Space)">
             <span class="keycap-icon">🚀</span>
             <span class="keycap-label">跳躍</span>
             <span class="keycap-sub">Space</span>
           </button>
-          <button class="keycap-btn keycap-action-btn keycap-hit" id="btn-hit" aria-label="殺球">
+          <!-- 殺球鍵 -->
+          <button class="keycap-btn keycap-action-btn keycap-hit" id="btn-hit" aria-label="殺球 (J)">
             <span class="keycap-icon">⚡</span>
             <span class="keycap-label">殺球</span>
             <span class="keycap-sub">J 鍵</span>
@@ -588,6 +625,19 @@
             <button class="modal-btn primary" id="modal-btn-next">再排一場 ➔</button>
             <button class="modal-btn secondary" id="modal-btn-rank" onclick="window.location.href='./ranking.html'">查看英雄榜 🏆</button>
             <button class="modal-btn secondary" id="modal-btn-lobby" onclick="window.location.href='./lobby.html'">返回大廳 🏠</button>
+          </div>
+        </div>
+      </div>
+
+      <!-- 觀戰結算彈窗 -->
+      <div class="modal-overlay" id="spectator-modal" style="display: none;">
+        <div class="modal-card animate-scaleIn">
+          <div class="modal-icon" id="spec-modal-icon">🏆</div>
+          <div class="modal-title" id="spec-modal-title">比賽結束！</div>
+          <div class="modal-desc" id="spec-modal-desc" style="font-size:14px; margin-bottom:16px;"></div>
+          <div class="modal-btns">
+            <button class="modal-btn primary" id="btn-spec-modal-close">🔙 返回賽事大廳</button>
+            <button class="modal-btn secondary" onclick="window.location.href='./ranking.html'">查看天梯榜 🏆</button>
           </div>
         </div>
       </div>

@@ -242,7 +242,7 @@ export class BadmintonEngine {
     const p2 = this.pikaPhysics.player2;
     const b = this.pikaPhysics.ball;
 
-    const isPredicted = (this.multiplayerRole === 'firebase' || this.multiplayerRole === 'cloud' || this.multiplayerRole === 'guest');
+    const isPredicted = (this.multiplayerRole === 'firebase' || this.multiplayerRole === 'cloud' || this.multiplayerRole === 'guest') && (this.cloudRole !== 'spectate');
     const isP1 = (this.cloudRole === 'p1');
     const isP2 = (this.cloudRole === 'p2');
 
