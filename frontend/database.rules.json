@@ -1,6 +1,27 @@
 {
   "rules": {
-    ".read": true,
-    ".write": true
+    "players": {
+      ".read": true,
+      ".write": true,
+      ".indexOn": ["points", "lastSeen", "createdAt"]
+    },
+    "rankedQueue": {
+      ".read": true,
+      ".write": true,
+      ".indexOn": ["createdAt", "status"]
+    },
+    "rankedRooms": {
+      ".read": true,
+      ".write": true,
+      ".indexOn": ["createdAt", "status"]
+    },
+    "tournaments": {
+      ".read": true,
+      ".write": true
+    },
+    "wedding": {
+      ".read": true,
+      ".write": true
+    }
   }
 }
