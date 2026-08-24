@@ -459,3 +459,13 @@ html, body {
 ::-webkit-scrollbar { width: 4px; }
 ::-webkit-scrollbar-track { background: transparent; }
 ::-webkit-scrollbar-thumb { background: var(--border); border-radius: 2px; }
+
+/* ============================
+   Zero-Latency Mobile Touch Controls
+   ============================ */
+.controls, .keycap-btn, .keycap-action-btn, canvas, .canvas-container, .dpad-btn, .action-btn {
+  touch-action: none !important;
+  -webkit-touch-callout: none !important;
+  -webkit-user-select: none !important;
+  user-select: none !important;
+}

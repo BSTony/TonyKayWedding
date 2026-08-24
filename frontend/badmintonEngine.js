@@ -257,7 +257,7 @@ export class BadmintonEngine {
         // 本地是 P1：本人物理以本地 0ms 預測為主，僅在重大偏差或換局時校正
         const diffX = Math.abs(p1.x - sX);
         const diffY = Math.abs(p1.y - sY);
-        if (diffX > 24 || diffY > 24 || this.roundState !== 'playing' || state.newRound) {
+        if (diffX > 48 || diffY > 48 || this.roundState !== 'playing' || state.newRound) {
           p1.x = sX;
           p1.y = sY;
           p1.state = sState;
@@ -284,7 +284,7 @@ export class BadmintonEngine {
         // 本地是 P2：本人物理以本地 0ms 預測為主，僅在重大偏差或換局時校正
         const diffX = Math.abs(p2.x - sX);
         const diffY = Math.abs(p2.y - sY);
-        if (diffX > 24 || diffY > 24 || this.roundState !== 'playing' || state.newRound) {
+        if (diffX > 48 || diffY > 48 || this.roundState !== 'playing' || state.newRound) {
           p2.x = sX;
           p2.y = sY;
           p2.state = sState;
@@ -406,10 +406,10 @@ export class BadmintonEngine {
     // ── 客戶端多人連線模式 (Firebase / 雲端 WebSocket) ──
     if (this.multiplayerRole === 'firebase' || this.multiplayerRole === 'cloud' || this.multiplayerRole === 'guest') {
       const hit = this.powerHitBuffer > 0 ? 1 : 0;
-      const currentInputKey = `${this.keys.left},${this.keys.right},${this.keys.up},${this.keys.down},${hit}`;
+      const currentInputKey = `${this.keys.left ? 1 : 0},${this.keys.right ? 1 : 0},${this.keys.up ? 1 : 0},${this.keys.down ? 1 : 0},${hit}`;
 
-      // 1. 發送指令給伺服器 (按鍵變動時立即送出，否則以 30ms 節流)
-      if (now - this.lastInputSendTime > 30 || currentInputKey !== this.lastSentInputKey || hit) {
+      // 1. 發送指令給伺服器 (按鍵變動時立即 0ms 送出，長按時以 50ms 節流保活)
+      if (currentInputKey !== this.lastSentInputKey || hit || (now - this.lastInputSendTime > 50)) {
         this.lastInputSendTime = now;
         this.lastSentInputKey = currentInputKey;
         if (hit && this.powerHitBuffer > 0) this.powerHitBuffer--;
@@ -573,14 +573,15 @@ export class BadmintonEngine {
 
     // ── Host 廣播即時權威畫面狀態給 Guest ──
     if (this.isMultiplayer && this.multiplayerRole === 'host' && this.onSendState) {
-      if (now - this.lastStateSendTime > 40 || punchEvent || isBallTouchingGround) {
+      if (now - this.lastStateSendTime > 33 || punchEvent || isBallTouchingGround) {
         this.lastStateSendTime = now;
         this.onSendState({
-          p1: { x: p1.x, y: p1.y, state: p1.state, frameNumber: p1.frameNumber, divingDirection: p1.divingDirection },
-          p2: { x: p2.x, y: p2.y, state: p2.state, frameNumber: p2.frameNumber, divingDirection: p2.divingDirection },
+          p1: { x: Math.round(p1.x * 10) / 10, y: Math.round(p1.y * 10) / 10, s: p1.state, f: p1.frameNumber, d: p1.divingDirection },
+          p2: { x: Math.round(p2.x * 10) / 10, y: Math.round(p2.y * 10) / 10, s: p2.state, f: p2.frameNumber, d: p2.divingDirection },
           b: {
-            x: b.x, y: b.y, vx: b.xVelocity, vy: b.yVelocity, rot: b.rotation, power: b.isPowerHit,
-            px: b.previousX, py: b.previousY, ppx: b.previousPreviousX, ppy: b.previousPreviousY
+            x: Math.round(b.x * 10) / 10, y: Math.round(b.y * 10) / 10,
+            vx: Math.round(b.xVelocity * 10) / 10, vy: Math.round(b.yVelocity * 10) / 10,
+            r: b.rotation, p: b.isPowerHit ? 1 : 0
           },
           s1: this.playerScore,
           s2: this.compScore,
@@ -622,8 +623,6 @@ export class BadmintonEngine {
   }
 
   updateSmoothPositions() {
-    if (!this.isMultiplayer) return;
-
     const p1 = this.pikaPhysics.player1;
     const p2 = this.pikaPhysics.player2;
     const b = this.pikaPhysics.ball;
@@ -640,41 +639,61 @@ export class BadmintonEngine {
     const targetBallX = Number.isFinite(b.x) ? b.x : 56;
     const targetBallY = Number.isFinite(b.y) ? b.y : 100;
 
-    // 皮卡丘平滑漸進 (大於 50px 瞬移時直接重置，否則 0.45 Lerp 絲滑跟隨)
+    // 🌟 在單人 AI 模式或 1P Host 模式：本地就是物理權威，直接 100% 渲染真實座標 (0ms 零延遲)
+    if (!this.isMultiplayer || this.multiplayerRole === 'host') {
+      this.smoothP1.x = targetP1X;
+      this.smoothP1.y = targetP1Y;
+      this.smoothP2.x = targetP2X;
+      this.smoothP2.y = targetP2Y;
+      this.smoothBall.x = targetBallX;
+      this.smoothBall.y = targetBallY;
+      return;
+    }
+
+    // 🌟 在 2P (Guest) 與觀戰模式：採用超高敏捷 Lerp (0.65) 與拋物線推算，消除一切殘影延遲
+    const isP2 = (this.cloudRole === 'p2');
+
+    // P1 (遠端對手) 平滑跟隨
     if (Math.abs(this.smoothP1.x - targetP1X) > 50) this.smoothP1.x = targetP1X;
-    else this.smoothP1.x += (targetP1X - this.smoothP1.x) * 0.45;
+    else this.smoothP1.x += (targetP1X - this.smoothP1.x) * 0.65;
 
     if (Math.abs(this.smoothP1.y - targetP1Y) > 50) this.smoothP1.y = targetP1Y;
-    else this.smoothP1.y += (targetP1Y - this.smoothP1.y) * 0.45;
+    else this.smoothP1.y += (targetP1Y - this.smoothP1.y) * 0.65;
 
-    if (Math.abs(this.smoothP2.x - targetP2X) > 50) this.smoothP2.x = targetP2X;
-    else this.smoothP2.x += (targetP2X - this.smoothP2.x) * 0.45;
+    // P2 (若本地是 2P，本人 100% 依據本地預測，0 延遲！)
+    if (isP2) {
+      this.smoothP2.x = targetP2X;
+      this.smoothP2.y = targetP2Y;
+    } else {
+      if (Math.abs(this.smoothP2.x - targetP2X) > 50) this.smoothP2.x = targetP2X;
+      else this.smoothP2.x += (targetP2X - this.smoothP2.x) * 0.65;
 
-    if (Math.abs(this.smoothP2.y - targetP2Y) > 50) this.smoothP2.y = targetP2Y;
-    else this.smoothP2.y += (targetP2Y - this.smoothP2.y) * 0.45;
+      if (Math.abs(this.smoothP2.y - targetP2Y) > 50) this.smoothP2.y = targetP2Y;
+      else this.smoothP2.y += (targetP2Y - this.smoothP2.y) * 0.65;
+    }
 
-    // 羽毛球 Dead Reckoning 物理外推 (在 33ms 網絡間隙內推算拋物線，消除卡頓與跳躍)
+    // 羽毛球 Dead Reckoning 拋物線外推
     if (this.ballServerPos && this.roundState === 'playing') {
       const elapsed = Math.max(0, performance.now() - this.ballServerPos.time);
-      const tFrames = Math.min(elapsed / 33.333, 1.8);
+      const tFrames = Math.min(elapsed / 33.333, 1.6);
 
       const estX = this.ballServerPos.x + this.ballServerPos.vx * tFrames;
       let estY = this.ballServerPos.y + this.ballServerPos.vy * tFrames + 0.5 * 1.0 * tFrames * tFrames;
       if (estY > 252) estY = 252;
 
-      if (Math.abs(this.smoothBall.x - estX) > 60 || Math.abs(this.smoothBall.y - estY) > 60) {
+      if (Math.abs(this.smoothBall.x - estX) > 45 || Math.abs(this.smoothBall.y - estY) > 45) {
         this.smoothBall.x = estX;
         this.smoothBall.y = estY;
       } else {
-        this.smoothBall.x += (estX - this.smoothBall.x) * 0.48;
-        this.smoothBall.y += (estY - this.smoothBall.y) * 0.48;
+        this.smoothBall.x += (estX - this.smoothBall.x) * 0.65;
+        this.smoothBall.y += (estY - this.smoothBall.y) * 0.65;
       }
     } else {
-      if (Math.abs(this.smoothBall.x - targetBallX) > 50) this.smoothBall.x = targetBallX;
-      else this.smoothBall.x += (targetBallX - this.smoothBall.x) * 0.48;
+      if (Math.abs(this.smoothBall.x - targetBallX) > 45) this.smoothBall.x = targetBallX;
+      else this.smoothBall.x += (targetBallX - this.smoothBall.x) * 0.65;
 
-      if (Math.abs(this.smoothBall.y - targetBallY) > 50) this.smoothBall.y = targetBallY;
-      else this.smoothBall.y += (targetBallY - this.smoothBall.y) * 0.48;
+      if (Math.abs(this.smoothBall.y - targetBallY) > 45) this.smoothBall.y = targetBallY;
+      else this.smoothBall.y += (targetBallY - this.smoothBall.y) * 0.65;
     }
   }
 
