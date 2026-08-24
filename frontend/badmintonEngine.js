@@ -96,11 +96,12 @@ export class BadmintonEngine {
     this.lastInputSendTime = 0;
   }
 
-  start(maxScore = 5, compBoldness = 2) {
+  start(maxScore = 5, compBoldness = 2, onSendState = null) {
     this.isMultiplayer = false;
     this.multiplayerRole = 'single';
     this.maxScore = maxScore;
     this.compBoldness = compBoldness;
+    this.onSendState = onSendState;
     this.isRunning = true;
     this.roundState = 'playing';
     this.playerScore = 0;
@@ -571,8 +572,8 @@ export class BadmintonEngine {
       }
     }
 
-    // ── Host 廣播即時權威畫面狀態給 Guest ──
-    if (this.isMultiplayer && this.multiplayerRole === 'host' && this.onSendState) {
+    // ── 廣播即時權威畫面狀態給 Guest 或 Spectators ──
+    if (this.onSendState && (this.multiplayerRole === 'host' || this.multiplayerRole === 'single')) {
       if (now - this.lastStateSendTime > 33 || punchEvent || isBallTouchingGround) {
         this.lastStateSendTime = now;
         this.onSendState({

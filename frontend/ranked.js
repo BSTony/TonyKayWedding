@@ -102,15 +102,18 @@ onValue(ref(db, 'rankedRooms'), snap => {
   const rooms = snap.val() || {};
   const now = Date.now();
   const activeRooms = [];
+  let totalBattlingPlayers = 0;
+
   for (const rId in rooms) {
     const r = rooms[rId];
     if (r && r.status === 'playing' && !r.abandoned && r.createdAt && (now - r.createdAt < 5 * 60 * 1000)) {
       activeRooms.push({ id: rId, ...r });
+      totalBattlingPlayers += (r.guest?.isAI ? 1 : 2);
     }
   }
 
   const battlingEl = document.getElementById('stat-battling-count');
-  if (battlingEl) battlingEl.textContent = activeRooms.length * 2;
+  if (battlingEl) battlingEl.textContent = totalBattlingPlayers;
 
   const badgeEl = document.getElementById('live-matches-count-badge');
   if (badgeEl) badgeEl.textContent = `${activeRooms.length} 場`;
@@ -592,6 +595,9 @@ function enterArenaMatch() {
     matchEnded = true;
     if (currentRoomId) {
       update(ref(db, 'rankedRooms/' + currentRoomId), { status: 'finished' }).catch(() => {});
+      setTimeout(() => {
+        remove(ref(db, 'rankedRooms/' + currentRoomId)).catch(() => {});
+      }, 15000);
     }
     handleRankedGameOver(playerWon);
   };
@@ -641,8 +647,20 @@ function enterArenaMatch() {
       });
     }
   } else {
-    // 單人練習 / AI 對戰模式
-    gameEngine.start(5, currentOpponent.boldness || 3);
+    // 🌟 單人天梯 / AI 對戰模式：同步註冊房間並廣播畫面，讓大廳與好友隨時 LIVE 觀戰！
+    currentRoomId = 'room_' + uid + '_vs_ai_' + Date.now();
+    set(ref(db, 'rankedRooms/' + currentRoomId), {
+      host: { uid, nickname, points: myPoints, avatar: myAvatarEl.textContent },
+      guest: { uid: 'ai', nickname: currentOpponent.name, points: currentOpponent.points, avatar: currentOpponent.avatar, isAI: true },
+      status: 'playing',
+      createdAt: Date.now()
+    }).catch(() => {});
+
+    onDisconnect(ref(db, 'rankedRooms/' + currentRoomId)).remove().catch(() => {});
+
+    gameEngine.start(5, currentOpponent.boldness || 3, (state) => {
+      set(ref(db, 'rankedRooms/' + currentRoomId + '/state'), state).catch(() => {});
+    });
   }
 }
 
