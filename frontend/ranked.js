@@ -1,4 +1,5 @@
 import './version.js';
+import './lineRedirect.js';
 import { db, ref, onValue, set, get, update, remove, increment, onDisconnect } from './firebase.js';
 import { BadmintonEngine, setGlobalEngine } from './badmintonEngine.js';
 import { calculateRankedPoints } from './rankedScore.js';

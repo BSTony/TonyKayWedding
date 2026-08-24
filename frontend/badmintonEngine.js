@@ -623,7 +623,7 @@ export class BadmintonEngine {
     this.ctx.restore();
   }
 
-  updateSmoothPositions() {
+  updateSmoothPositions(elapsed = 16.666) {
     const p1 = this.pikaPhysics.player1;
     const p2 = this.pikaPhysics.player2;
     const b = this.pikaPhysics.ball;
@@ -651,15 +651,19 @@ export class BadmintonEngine {
       return;
     }
 
-    // 🌟 在 2P (Guest) 與觀戰模式：採用超高敏捷 Lerp (0.65) 與拋物線推算，消除一切殘影延遲
+    // 🌟 自適應幀率阻尼算法 (Frame-Rate Independent Damping)
+    // 解決 Mac 120Hz ProMotion 螢幕 / Safari 與 Windows 60Hz 的幀率差異，確保在任何刷新率下均維持最極致絲滑度！
+    const dtRatio = Math.max(0.1, Math.min(3.0, elapsed / 16.666));
+    const smoothFactor = 1 - Math.pow(1 - 0.60, dtRatio);
+
     const isP2 = (this.cloudRole === 'p2');
 
     // P1 (遠端對手) 平滑跟隨
     if (Math.abs(this.smoothP1.x - targetP1X) > 50) this.smoothP1.x = targetP1X;
-    else this.smoothP1.x += (targetP1X - this.smoothP1.x) * 0.65;
+    else this.smoothP1.x += (targetP1X - this.smoothP1.x) * smoothFactor;
 
     if (Math.abs(this.smoothP1.y - targetP1Y) > 50) this.smoothP1.y = targetP1Y;
-    else this.smoothP1.y += (targetP1Y - this.smoothP1.y) * 0.65;
+    else this.smoothP1.y += (targetP1Y - this.smoothP1.y) * smoothFactor;
 
     // P2 (若本地是 2P，本人 100% 依據本地預測，0 延遲！)
     if (isP2) {
@@ -667,16 +671,16 @@ export class BadmintonEngine {
       this.smoothP2.y = targetP2Y;
     } else {
       if (Math.abs(this.smoothP2.x - targetP2X) > 50) this.smoothP2.x = targetP2X;
-      else this.smoothP2.x += (targetP2X - this.smoothP2.x) * 0.65;
+      else this.smoothP2.x += (targetP2X - this.smoothP2.x) * smoothFactor;
 
       if (Math.abs(this.smoothP2.y - targetP2Y) > 50) this.smoothP2.y = targetP2Y;
-      else this.smoothP2.y += (targetP2Y - this.smoothP2.y) * 0.65;
+      else this.smoothP2.y += (targetP2Y - this.smoothP2.y) * smoothFactor;
     }
 
     // 羽毛球 Dead Reckoning 拋物線外推
     if (this.ballServerPos && this.roundState === 'playing') {
-      const elapsed = Math.max(0, performance.now() - this.ballServerPos.time);
-      const tFrames = Math.min(elapsed / 33.333, 1.6);
+      const ballElapsed = Math.max(0, performance.now() - this.ballServerPos.time);
+      const tFrames = Math.min(ballElapsed / 33.333, 1.6);
 
       const estX = this.ballServerPos.x + this.ballServerPos.vx * tFrames;
       let estY = this.ballServerPos.y + this.ballServerPos.vy * tFrames + 0.5 * 1.0 * tFrames * tFrames;
@@ -686,15 +690,15 @@ export class BadmintonEngine {
         this.smoothBall.x = estX;
         this.smoothBall.y = estY;
       } else {
-        this.smoothBall.x += (estX - this.smoothBall.x) * 0.65;
-        this.smoothBall.y += (estY - this.smoothBall.y) * 0.65;
+        this.smoothBall.x += (estX - this.smoothBall.x) * smoothFactor;
+        this.smoothBall.y += (estY - this.smoothBall.y) * smoothFactor;
       }
     } else {
       if (Math.abs(this.smoothBall.x - targetBallX) > 45) this.smoothBall.x = targetBallX;
-      else this.smoothBall.x += (targetBallX - this.smoothBall.x) * 0.65;
+      else this.smoothBall.x += (targetBallX - this.smoothBall.x) * smoothFactor;
 
       if (Math.abs(this.smoothBall.y - targetBallY) > 45) this.smoothBall.y = targetBallY;
-      else this.smoothBall.y += (targetBallY - this.smoothBall.y) * 0.65;
+      else this.smoothBall.y += (targetBallY - this.smoothBall.y) * smoothFactor;
     }
   }
 
@@ -907,8 +911,8 @@ export class BadmintonEngine {
       this.accumulator -= fixedTimeStep;
     }
 
-    // 每一幀進行 60 FPS 平滑補間插值 (Lerp)
-    this.updateSmoothPositions();
+    // 每一幀進行高刷新率自適應平滑補間插值 (Lerp)
+    this.updateSmoothPositions(elapsed);
 
     this.draw();
     requestAnimationFrame(this.loop);

@@ -1,5 +1,6 @@
-import { db, ref, onValue, update, increment } from './firebase.js';
 import './version.js';
+import './lineRedirect.js';
+import { db, ref, onValue, update, increment } from './firebase.js';
 import { BadmintonEngine } from './badmintonEngine.js';
 import { calculateRankedPoints } from './rankedScore.js';
 

@@ -118,6 +118,16 @@
           Google 登入
         </button>
       </div>
+    <!-- LINE Webview 提示卡 (若在 LINE 內開啟則顯示，一鍵跳出到 Safari/Chrome) -->
+    <div id="line-external-banner" class="card animate-fadeInUp" style="display:none; background: linear-gradient(135deg, #06c755, #059669); color:white; margin-bottom: 14px; padding: 12px 14px; border:none; box-shadow:0 4px 12px rgba(6,199,85,0.35);">
+      <div style="display:flex; align-items:center; justify-content:space-between; gap:10px;">
+        <div style="font-size:12px; font-weight:700; line-height:1.4;">
+          💬 用預設瀏覽器開啟<br><span style="font-size:11px; font-weight:400; opacity:0.9;">隨時返回 LINE 聊天且遊玩更順暢！</span>
+        </div>
+        <button id="btn-open-external-browser" style="background:white; color:#059669; border:none; border-radius:10px; padding:8px 12px; font-size:12px; font-weight:900; cursor:pointer; white-space:nowrap; box-shadow:0 2px 6px rgba(0,0,0,0.15);">
+          🌐 外部開啟 ➔
+        </button>
+      </div>
     </div>
 
     <!-- Online Count -->
@@ -193,6 +203,7 @@
 
   <script type="module">
     import './version.js';
+    import './lineRedirect.js';
     import { db, ref, onValue, set, get, update, auth, googleProvider, signInWithPopup, signOut, onAuthStateChanged } from './firebase.js';
 
     const EMOJIS = ['🏆', '👑', '⚡', '🌸', '🦋', '🎯', '🔥', '🌟', '💪', '🐼'];
@@ -454,6 +465,21 @@
       const el = document.getElementById('lobby-battling-count');
       if (el) el.textContent = battlingCount;
     });
+
+    // ── LINE 內嵌瀏覽器提示卡狀態與跳轉 ──
+    const isLine = /Line/i.test(navigator.userAgent);
+    const lineBanner = document.getElementById('line-external-banner');
+    if (isLine && lineBanner) {
+      lineBanner.style.display = 'block';
+      const btnOpenExt = document.getElementById('btn-open-external-browser');
+      if (btnOpenExt) {
+        btnOpenExt.onclick = () => {
+          const u = new URL(window.location.href);
+          u.searchParams.set('openExternalBrowser', '1');
+          window.location.href = u.toString();
+        };
+      }
+    }
 
     // 定期保活
     setInterval(() => {
