@@ -163,7 +163,7 @@
 
     // 監聽 Firebase Auth 登入狀態 (自動對照 Google 帳號與最新暱稱/積分)
     onAuthStateChanged(auth, async (user) => {
-      if (user) {
+      if (user && !user.isAnonymous) {
         const googleUid = 'google_' + user.uid;
         try {
           const snap = await get(ref(db, 'players/' + googleUid));

@@ -404,12 +404,12 @@ function startMatchmaking() {
             // 雙向即時握手配對
             update(ref(db, 'rankedQueue/' + otherKey), {
               status: 'matched',
-              matchedWith: { uid, nickname, points: myPoints, avatar: myAvatarEl.textContent }
+              matchedWith: { queueKey, uid, nickname, points: myPoints, avatar: myAvatarEl.textContent }
             }).catch(() => {});
 
             update(queueRef, {
               status: 'matched',
-              matchedWith: { uid: other.uid, nickname: other.nickname, points: other.points || 0, avatar: other.avatar || '🏸' }
+              matchedWith: { queueKey: other.queueKey || otherKey, uid: other.uid, nickname: other.nickname, points: other.points || 0, avatar: other.avatar || '🏸' }
             }).catch(() => {});
 
             pairWithRealOpponent(other);
@@ -568,7 +568,7 @@ function enterArenaMatch() {
   matchEnded = false;
 
   // 永遠保持 P1 = 左側選手，P2 = 右側選手，避免客端名稱反轉
-  if (isHostPlayer) {
+  if (isHostPlayer || !currentOpponent.isRealPlayer) {
     arenaP1Name.textContent = `👦 ${nickname} (${myPoints} pts) [我]`;
     arenaP2Name.textContent = `${currentOpponent.name} (${currentOpponent.points} pts)`;
   } else {
@@ -578,11 +578,10 @@ function enterArenaMatch() {
   arenaP1Score.textContent = '0';
   arenaP2Score.textContent = '0';
 
-  if (!gameEngine) {
-    gameEngine = new BadmintonEngine('game-canvas');
-    setGlobalEngine(gameEngine);
-    bindMobileControls();
-  }
+  if (gameEngine) gameEngine.stop();
+  gameEngine = new BadmintonEngine('game-canvas');
+  setGlobalEngine(gameEngine);
+  bindMobileControls();
 
   gameEngine.onScoreUpdate = (p1Score, p2Score) => {
     arenaP1Score.textContent = p1Score;
@@ -591,14 +590,14 @@ function enterArenaMatch() {
 
   gameEngine.onGameOver = (playerWon) => {
     matchEnded = true;
+    if (currentRoomId) {
+      update(ref(db, 'rankedRooms/' + currentRoomId), { status: 'finished' }).catch(() => {});
+    }
     handleRankedGameOver(playerWon);
   };
 
-    // 判定真人連線對打 vs 單人 AI
+  // 判定真人連線對打 vs 單人 AI
   if (currentOpponent.isRealPlayer && currentRoomId) {
-    const role = isHostPlayer ? 'p1' : 'p2';
-    const inputKey = isHostPlayer ? 'p1Input' : 'p2Input';
-
     // 監聽是否有一方中途離開 / 斷線 (不計勝敗與積分)
     onDisconnect(ref(db, 'rankedRooms/' + currentRoomId + '/abandoned')).set({ by: uid, name: nickname }).catch(() => {});
 
@@ -616,20 +615,31 @@ function enterArenaMatch() {
       }
     });
 
-    // 🌟 100% 雲端伺服器權威模式 (Google Cloud Run Server-Authoritative)
-    //    1P 與 2P 均為純客戶端，完全不做本地物理計算，只將按鍵指令發送至 Firebase
-    //    由 Google Cloud Run 專屬伺服器在台灣機房進行唯一的 30 FPS 物理計算與廣播
-    //    雙方接收同一份 state 渲染，徹底杜絕多引擎衝突瞬移！
-    gameEngine.startFirebaseClient(role, (input) => {
-      set(ref(db, 'rankedRooms/' + currentRoomId + '/' + inputKey), input).catch(() => {});
-    }, 5);
+    if (isHostPlayer) {
+      // 🌟 1P (Host) 權威主機模式：執行物理模擬，廣播狀態，接收 2P 操作
+      gameEngine.startMultiplayer('host', 5, null, (state) => {
+        set(ref(db, 'rankedRooms/' + currentRoomId + '/state'), state).catch(() => {});
+      });
 
-    onValue(ref(db, 'rankedRooms/' + currentRoomId + '/state'), (snap) => {
-      const state = snap.val();
-      if (state && gameEngine) {
-        gameEngine.receiveRemoteState(state);
-      }
-    });
+      onValue(ref(db, 'rankedRooms/' + currentRoomId + '/p2Input'), (snap) => {
+        const input = snap.val();
+        if (input && gameEngine) {
+          gameEngine.setRemoteGuestInput(input);
+        }
+      });
+    } else {
+      // 🌟 2P (Guest) 客戶端模式：將本地操作送至 Firebase，接收 1P 權威狀態渲染
+      gameEngine.startFirebaseClient('p2', (input) => {
+        set(ref(db, 'rankedRooms/' + currentRoomId + '/p2Input'), input).catch(() => {});
+      }, 5);
+
+      onValue(ref(db, 'rankedRooms/' + currentRoomId + '/state'), (snap) => {
+        const state = snap.val();
+        if (state && gameEngine) {
+          gameEngine.receiveRemoteState(state);
+        }
+      });
+    }
   } else {
     // 單人練習 / AI 對戰模式
     gameEngine.start(5, currentOpponent.boldness || 3);
@@ -669,6 +679,14 @@ function handleRankedGameOver(playerWon) {
   }
 
   matchModal.style.display = 'flex';
+}
+
+if (modalBtnNext) {
+  modalBtnNext.addEventListener('click', () => {
+    matchModal.style.display = 'none';
+    if (gameEngine) gameEngine.stop();
+    switchTab('play');
+  });
 }
 
 // 退出賽場返回大廳 (若比賽進行中離開，通知對手中止並取消本局)

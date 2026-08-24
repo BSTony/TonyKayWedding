@@ -263,7 +263,7 @@
 
     // 🌟 自動對照與同步 Firebase Auth 登入者狀態 (免重複登入)
     onAuthStateChanged(auth, async (user) => {
-      if (user) {
+      if (user && !user.isAnonymous) {
         const googleUid = 'google_' + user.uid;
         try {
           const snap = await get(ref(db, 'players/' + googleUid));

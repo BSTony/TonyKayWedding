@@ -3,6 +3,7 @@ import express from 'express';
 import { WebSocketServer, WebSocket } from 'ws';
 import { initializeApp } from 'firebase/app';
 import { getDatabase, ref, onValue, set, update, get } from 'firebase/database';
+import { getAuth, signInAnonymously } from 'firebase/auth';
 import { PikaPhysics, PikaUserInput } from './physics.js';
 
 const app = express();
@@ -24,6 +25,14 @@ const firebaseConfig = {
 
 const fbApp = initializeApp(firebaseConfig);
 const db = getDatabase(fbApp);
+const auth = getAuth(fbApp);
+
+// 伺服器裁判以匿名身分取得 Firebase 授權
+signInAnonymously(auth).then(() => {
+  console.log('🔒 雲端伺服器已成功取得 Firebase 安全認證 (auth != null)');
+}).catch(err => {
+  console.warn('伺服器認證提示:', err.message);
+});
 
 // 雲端房間物理實例表
 const activeFirebaseRooms = {};
@@ -35,11 +44,22 @@ onValue(ref(db, 'rankedRooms'), (snapshot) => {
   const rooms = snapshot.val();
   if (!rooms) return;
 
+  const now = Date.now();
   for (const roomId in rooms) {
     const room = rooms[roomId];
-    if (room && room.status === 'playing') {
-      if (!activeFirebaseRooms[roomId]) {
-        startServerRoomSimulation(roomId, room);
+    if (room && room.status === 'playing' && !room.abandoned) {
+      // 忽略超過 3 分鐘前的舊廢棄房間
+      const isFresh = room.createdAt && (now - room.createdAt < 3 * 60 * 1000);
+      if (isFresh) {
+        if (!activeFirebaseRooms[roomId]) {
+          startServerRoomSimulation(roomId, room);
+        }
+      } else {
+        // 舊房間自動結案
+        update(ref(db, `rankedRooms/${roomId}`), { status: 'stale_finished' }).catch(() => {});
+        if (activeFirebaseRooms[roomId]) {
+          stopServerRoomSimulation(roomId);
+        }
       }
     } else {
       if (activeFirebaseRooms[roomId]) {
@@ -50,6 +70,7 @@ onValue(ref(db, 'rankedRooms'), (snapshot) => {
 });
 
 function startServerRoomSimulation(roomId, roomData) {
+  if (activeFirebaseRooms[roomId]) return; // 防止重複建立
   console.log(`[Firebase Cloud Room ${roomId}] 🚀 雲端伺服器接管權威物理計算 (30 FPS)！`);
 
   const physics = new PikaPhysics(false, false);
@@ -166,6 +187,17 @@ function startServerRoomSimulation(roomId, roomData) {
         return;
       } else {
         roomState.roundState = 'scoring';
+        const scoringState = {
+          p1: { x: p1.x, y: p1.y, state: p1.state, frameNumber: p1.frameNumber, divingDirection: p1.divingDirection },
+          p2: { x: p2.x, y: p2.y, state: p2.state, frameNumber: p2.frameNumber, divingDirection: p2.divingDirection },
+          b: { x: b.x, y: 252, vx: 0, vy: 0, rot: b.rotation, power: false },
+          s1: roomState.s1,
+          s2: roomState.s2,
+          round: 'scoring',
+          punch: punchEvent
+        };
+        set(ref(db, `rankedRooms/${roomId}/state`), scoringState).catch(() => {});
+
         setTimeout(() => {
           if (!activeFirebaseRooms[roomId]) return;
           const p2Serve = ballX < 216;
@@ -173,11 +205,44 @@ function startServerRoomSimulation(roomId, roomData) {
           physics.player2.initializeForNewRound();
           physics.ball.initializeForNewRound(p2Serve);
           roomState.roundState = 'playing';
-        }, 1200);
+
+          const newRoundState = {
+            p1: { x: physics.player1.x, y: physics.player1.y, state: physics.player1.state, frameNumber: physics.player1.frameNumber, divingDirection: physics.player1.divingDirection },
+            p2: { x: physics.player2.x, y: physics.player2.y, state: physics.player2.state, frameNumber: physics.player2.frameNumber, divingDirection: physics.player2.divingDirection },
+            b: { x: physics.ball.x, y: physics.ball.y, vx: physics.ball.xVelocity, vy: physics.ball.yVelocity, rot: physics.ball.rotation, power: false },
+            s1: roomState.s1,
+            s2: roomState.s2,
+            round: 'playing',
+            newRound: true
+          };
+          set(ref(db, `rankedRooms/${roomId}/state`), newRoundState).catch(() => {});
+        }, 1100);
       }
     }
 
     const now = Date.now();
+
+    // 1. WebSocket 高速極速通道廣播 (10ms 零延遲直連)
+    const sockets = wsRooms[roomId];
+    if (sockets) {
+      const wsPayload = JSON.stringify({
+        t: 's',
+        p1: { x: p1.x, y: p1.y, s: p1.state, f: p1.frameNumber, d: p1.divingDirection },
+        p2: { x: p2.x, y: p2.y, s: p2.state, f: p2.frameNumber, d: p2.divingDirection },
+        b: {
+          x: b.x, y: b.y, vx: b.xVelocity, vy: b.yVelocity, rot: b.rotation, power: b.isPowerHit,
+          px: b.previousX, py: b.previousY
+        },
+        s1: roomState.s1,
+        s2: roomState.s2,
+        round: roomState.roundState,
+        punch: punchEvent
+      });
+      if (sockets.p1 && sockets.p1.readyState === WebSocket.OPEN) sockets.p1.send(wsPayload);
+      if (sockets.p2 && sockets.p2.readyState === WebSocket.OPEN) sockets.p2.send(wsPayload);
+    }
+
+    // 2. Firebase RTDB 同步備援
     if (now - roomState.lastWriteTime > 40 || punchEvent || isTouchingGround) {
       roomState.lastWriteTime = now;
       set(ref(db, `rankedRooms/${roomId}/state`), {
@@ -204,9 +269,43 @@ function stopServerRoomSimulation(roomId) {
     if (room.loopTimer) clearInterval(room.loopTimer);
     if (room.unsubs) room.unsubs.forEach(u => typeof u === 'function' && u());
     delete activeFirebaseRooms[roomId];
+    if (wsRooms[roomId]) delete wsRooms[roomId];
     console.log(`[Firebase Cloud Room ${roomId}] 房間物理計算結束釋放。`);
   }
 }
+
+// ── WebSocket 連線閘道 (極速直連通道) ──
+const wss = new WebSocketServer({ server });
+const wsRooms = {};
+
+wss.on('connection', (ws) => {
+  let joinedRoomId = null;
+  let clientRole = null;
+
+  ws.on('message', (raw) => {
+    try {
+      const data = JSON.parse(raw);
+      if (data.type === 'join') {
+        joinedRoomId = data.roomId;
+        clientRole = data.role; // 'p1' 或 'p2'
+        if (!wsRooms[joinedRoomId]) wsRooms[joinedRoomId] = {};
+        wsRooms[joinedRoomId][clientRole] = ws;
+      } else if (data.type === 'input') {
+        const room = activeFirebaseRooms[joinedRoomId];
+        if (room && data.input) {
+          if (data.role === 'p1') room.p1Raw = { ...data.input };
+          if (data.role === 'p2') room.p2Raw = { ...data.input };
+        }
+      }
+    } catch (e) {}
+  });
+
+  ws.on('close', () => {
+    if (joinedRoomId && wsRooms[joinedRoomId] && clientRole) {
+      delete wsRooms[joinedRoomId][clientRole];
+    }
+  });
+});
 
 app.get('/', (req, res) => {
   res.json({
