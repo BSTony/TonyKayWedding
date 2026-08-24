@@ -324,8 +324,8 @@ function startMatchSimulation(p1, p2, isP1, isP2, matchIdx) {
     showMatchResultModal(winner, loser, scoreResult, matchIdx);
   };
 
-  // 難度配置 (決賽難度提升)
-  const boldness = matchIdx === 2 ? 4 : 2;
+  // 難度配置 (決賽魔王級難度)
+  const boldness = matchIdx === 2 ? 8 : 5;
   gameEngine.start(5, boldness);
 }
 

@@ -45,25 +45,25 @@ playerNameBadge.textContent = '👦 ' + nickname;
 const TOURNAMENT_ROUNDS = [
   {
     stageName: '第一輪 · 八強晉級賽',
-    opponentName: '🥉【青銅初階】AI',
+    opponentName: '🥉【青銅高階】AI',
     targetScore: 5,
-    boldness: 1,
+    boldness: 4,
     rewardPoints: 50,
     rewardWins: 1
   },
   {
     stageName: '第二輪 · 四強準決賽',
-    opponentName: '🥇【黃金大師】AI',
+    opponentName: '🥇【黃金專家】AI',
     targetScore: 5,
-    boldness: 3,
+    boldness: 6,
     rewardPoints: 100,
     rewardWins: 1
   },
   {
     stageName: '最終決賽 · 總冠軍爭奪',
-    opponentName: '👑【最強王者】新娘 KAY 👑',
+    opponentName: '👿【終極大魔王】新娘 KAY 👑',
     targetScore: 7,
-    boldness: 5,
+    boldness: 8,
     rewardPoints: 300,
     rewardWins: 2
   }
@@ -238,10 +238,10 @@ function startCurrentMatch() {
     opponentNameBadge.innerText = roundConfig.opponentName;
     gameEngine.start(roundConfig.targetScore, roundConfig.boldness);
   } else {
-    // 快速對戰模式 (直接打新娘 KAY)
+    // 快速對戰模式 (直接挑戰魔王級新娘 KAY)
     tournamentHud.style.display = 'none';
-    opponentNameBadge.innerText = '👰 新娘 KAY';
-    gameEngine.start(5, 2);
+    opponentNameBadge.innerText = '👿【終極大魔王】新娘 KAY 👑';
+    gameEngine.start(5, 8);
   }
 }
 
