@@ -812,64 +812,58 @@ function letComputerDecideUserInput(player, ball, theOtherPlayer, userInput) {
 
   let targetX = ball.expectedLandingPointX;
 
-  // 若球在對手場內，AI 根據強度回防至己方最佳防守/壓迫位置
+  // 若球在對手場內，AI 回防至己方最佳守備中場
   const isBallOnOpponentSide = (ball.x < leftBoundary || ball.x > rightBoundary);
-  if (isBallOnOpponentSide && Math.abs(ball.x - player.x) > Math.max(20, 100 - boldness * 10)) {
-    // 魔王級 AI 守在最有利的攻守兼備區域
-    targetX = player.isPlayer2 ? (leftBoundary + 75) : (leftBoundary + GROUND_HALF_WIDTH - 75);
+  if (isBallOnOpponentSide) {
+    targetX = myCourtCenter;
+  } else {
+    // 確保目標落點在自己半場的安全有效接球範圍
+    targetX = Math.max(leftBoundary + 18, Math.min(rightBoundary - 18, targetX));
   }
 
-  // 魔王級 AI 在球飛過來時，預判最佳起跳截擊點 (在半空中而非只看地面落點)
-  if (!isBallOnOpponentSide && boldness >= 5 && ball.y < 180) {
-    const timeToIntercept = Math.max(1, (ball.y - 120) / (ball.yVelocity || 1));
-    targetX = ball.x + (ball.xVelocity * Math.min(timeToIntercept, 3));
-    targetX = Math.max(leftBoundary + 16, Math.min(rightBoundary - 16, targetX));
-  }
-
-  // 走位靈敏度：魔王等級追球死區為 0，瞬間反應
-  const deadzone = Math.max(0, Math.floor(7 - boldness * 1.0));
+  // 走位判斷：死區設為 6（皮卡丘單幀移動步長），徹底消除原地抖動，同時保持最快反應！
+  const deadzone = 6;
   if (Math.abs(targetX - player.x) > deadzone) {
     userInput.xDirection = player.x < targetX ? 1 : -1;
   }
 
   if (player.state === 0) {
-    // 地面狀態：起跳時機判斷 (強度越高，越主動在高空截擊與重扣)
-    const interceptDist = 26 + boldness * 6;
-    const isBallApproaching = player.isPlayer2 ? (ball.x > GROUND_HALF_WIDTH - 45) : (ball.x < GROUND_HALF_WIDTH + 45);
-    
+    // 地面狀態：起跳攔截時機
+    const isBallOnMySideOrClose = player.isPlayer2 ? (ball.x > GROUND_HALF_WIDTH - 20) : (ball.x < GROUND_HALF_WIDTH + 20);
+    const distToBallX = Math.abs(ball.x - player.x);
+
     if (
-      isBallApproaching &&
-      Math.abs(ball.x - player.x) < interceptDist &&
-      ball.y > (10 + Math.max(0, 5 - boldness) * 8) &&
-      ball.y < (185 + boldness * 8) &&
-      ball.yVelocity > -6
+      isBallOnMySideOrClose &&
+      distToBallX < (28 + boldness * 2) &&
+      ball.y > (30 + Math.max(0, 5 - boldness) * 6) &&
+      ball.y < 175 &&
+      ball.yVelocity > -4
     ) {
-      // 魔王級 AI 100% 果斷起跳攔截
-      const jumpProb = Math.min(1.0, 0.45 + boldness * 0.15);
+      // 依難度果斷起跳攔截扣殺
+      const jumpProb = Math.min(1.0, 0.5 + boldness * 0.1);
       if (Math.random() < jumpProb) {
-        userInput.yDirection = -1; // 主動起跳
+        userInput.yDirection = -1; // 起跳
       }
     }
 
-    // 飛撲救險球 (當球即將落地且步行無法趕上時，魔王級 AI 極限貼地飛撲)
-    const diveThreshold = Math.max(8, 16 + boldness * 2);
+    // 飛撲救險球（當球即將落地且距離較遠時，極限飛撲）
     if (
-      ball.expectedLandingPointX > leftBoundary - 12 &&
-      ball.expectedLandingPointX < rightBoundary + 12 &&
-      Math.abs(ball.expectedLandingPointX - player.x) > diveThreshold &&
-      ball.y > Math.max(60, 110 - boldness * 7) &&
-      ball.yVelocity > 0
+      !isBallOnOpponentSide &&
+      ball.y > 135 &&
+      ball.yVelocity > 0 &&
+      Math.abs(ball.expectedLandingPointX - player.x) > 22
     ) {
       userInput.powerHit = 1;
       userInput.xDirection = player.x < ball.expectedLandingPointX ? 1 : -1;
     }
   } else if (player.state === 1 || player.state === 2) {
-    // 空中狀態：空中微調與重扣
-    if (Math.abs(ball.x - player.x) > (boldness >= 6 ? 0 : 2)) {
+    // 空中狀態：空中微調朝向球
+    if (Math.abs(ball.x - player.x) > deadzone) {
       userInput.xDirection = player.x < ball.x ? 1 : -1;
     }
 
-    const smashHitRange = 48 + boldness * 3;
+    // 空中扣殺範圍
+    const smashHitRange = 48;
     if (Math.abs(ball.x - player.x) < smashHitRange && Math.abs(ball.y - player.y) < smashHitRange) {
       const willInputPowerHit = decideWhetherInputPowerHit(
         player,
@@ -896,38 +890,33 @@ function decideWhetherInputPowerHit(player, ball, theOtherPlayer, userInput, bol
   const oppLeftBoundary = (1 - Number(player.isPlayer2)) * GROUND_HALF_WIDTH;
   const oppRightBoundary = oppLeftBoundary + GROUND_HALF_WIDTH;
 
-  // 魔王級 AI 100% 計算刁鑽死角與對手盲區
-  const smartSnipeProb = Math.min(1.0, 0.4 + boldness * 0.15);
-  if (Math.random() < smartSnipeProb) {
-    for (let xDirection = 1; xDirection >= -1; xDirection--) {
-      for (let yDirection = -1; yDirection <= 1; yDirection++) {
-        const expectedLandingPointX = expectedLandingPointXWhenPowerHit(
-          xDirection,
-          yDirection,
-          ball
-        );
+  for (let xDirection = 1; xDirection >= -1; xDirection--) {
+    for (let yDirection = -1; yDirection <= 1; yDirection++) {
+      const expectedLandingPointX = expectedLandingPointXWhenPowerHit(
+        xDirection,
+        yDirection,
+        ball
+      );
 
-        // 檢查是否落在對手場內
-        if (expectedLandingPointX >= oppLeftBoundary && expectedLandingPointX <= oppRightBoundary) {
-          const distToOpponent = Math.abs(expectedLandingPointX - theOtherPlayer.x);
-          
-          // 評分演算法：距離對手越遠越好，邊界死角加分，下壓殺球若對手深遠則重扣近網
-          let score = distToOpponent;
-          const distToOppNet = Math.abs(expectedLandingPointX - GROUND_HALF_WIDTH);
-          const distToOppBack = Math.abs(expectedLandingPointX - (player.isPlayer2 ? 0 : 432));
+      // 檢查是否落在對手場內
+      if (expectedLandingPointX >= oppLeftBoundary && expectedLandingPointX <= oppRightBoundary) {
+        const distToOpponent = Math.abs(expectedLandingPointX - theOtherPlayer.x);
+        let score = distToOpponent;
 
-          // 對手靠後時，切短球扣近網；對手靠前時，深扣底線
-          if (theOtherPlayer.x > (oppLeftBoundary + oppRightBoundary) / 2) {
-            if (distToOppNet < 60) score += 30;
-          } else {
-            if (distToOppBack < 60) score += 30;
-          }
+        const distToOppNet = Math.abs(expectedLandingPointX - GROUND_HALF_WIDTH);
+        const distToOppBack = Math.abs(expectedLandingPointX - (player.isPlayer2 ? 0 : 432));
 
-          if (score > bestScore) {
-            bestScore = score;
-            bestXDir = xDirection;
-            bestYDir = yDirection;
-          }
+        // 智慧扣殺：若對手靠後防守，切短球扣近網；若對手靠前，挑後場底線
+        if (theOtherPlayer.x > (oppLeftBoundary + oppRightBoundary) / 2) {
+          if (distToOppNet < 60) score += 40;
+        } else {
+          if (distToOppBack < 60) score += 40;
+        }
+
+        if (score > bestScore) {
+          bestScore = score;
+          bestXDir = xDirection;
+          bestYDir = yDirection;
         }
       }
     }
