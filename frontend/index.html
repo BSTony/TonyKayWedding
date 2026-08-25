@@ -130,7 +130,8 @@
   </div>
 
   <script type="module">
-    import './lineRedirect.js';
+    import { handleLineRedirect } from './lineRedirect.js';
+    handleLineRedirect();
     import { auth, onAuthStateChanged, db, ref, get } from './firebase.js';
 
     // Floating animations

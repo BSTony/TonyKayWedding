@@ -203,7 +203,6 @@
 
   <script type="module">
     import './version.js';
-    import './lineRedirect.js';
     import { db, ref, onValue, set, get, update, auth, googleProvider, signInWithPopup, signOut, onAuthStateChanged } from './firebase.js';
 
     const EMOJIS = ['🏆', '👑', '⚡', '🌸', '🦋', '🎯', '🔥', '🌟', '💪', '🐼'];
@@ -325,7 +324,18 @@
     btnLobbyGoogle.addEventListener('click', async () => {
       try {
         btnLobbyGoogle.disabled = true;
-        btnLobbyGoogle.textContent = '登入中...';
+        btnLobbyGoogle.textContent = '⏳ 連線中...';
+
+        // 檢查是否在 LINE / 社群 App 內嵌瀏覽器中 (Google OAuth 政策禁止在 Webview 內彈出登入視窗)
+        const ua = navigator.userAgent || '';
+        const isInApp = /\bLine\/|\bLIFF\b|FBAN|FBAV|Instagram/i.test(ua);
+        if (isInApp) {
+          btnLobbyGoogle.disabled = false;
+          btnLobbyGoogle.textContent = 'Google 登入';
+          alert('提示：LINE / 社群 App 內嵌瀏覽器限制 Google 登入。\n請點擊上方【🌐 外部開啟】改用 Safari / Chrome 開啟即可登入！');
+          return;
+        }
+
         const result = await signInWithPopup(auth, googleProvider);
         const user = result.user;
         const googleUid = 'google_' + user.uid;
@@ -354,6 +364,11 @@
           });
         }
 
+        uid = googleUid;
+        nickname = savedNickname;
+        photoURL = photo;
+        isGoogleUser = true;
+
         localStorage.setItem('wbc_uid', googleUid);
         localStorage.setItem('wbc_nickname', savedNickname);
         localStorage.setItem('wbc_photo', photo);
@@ -361,12 +376,21 @@
         localStorage.setItem('wbc_points', points);
         localStorage.setItem('wbc_wins', wins);
 
-        window.location.reload();
+        renderUIProfile();
       } catch (err) {
         console.error('Lobby Google login error:', err);
         btnLobbyGoogle.disabled = false;
         btnLobbyGoogle.textContent = 'Google 登入';
-        alert('Google 登入連線提示：' + (err.message || err));
+
+        if (err.code === 'auth/popup-blocked') {
+          alert('提示：手機瀏覽器阻擋了 Google 登入彈出視窗，請允許彈出式視窗後重試，或直接使用訪客暢玩！');
+        } else if (err.code === 'auth/popup-closed-by-user' || err.code === 'auth/cancelled-popup-request') {
+          // 用戶關閉視窗，無需報錯
+        } else if (err.code === 'auth/disallowed_useragent') {
+          alert('提示：目前環境不支援 Google 登入，請點擊上方【🌐 外部開啟】改用 Safari / Chrome 開啟！');
+        } else {
+          alert('Google 登入連線提示：' + (err.message || err));
+        }
       }
     });
 
