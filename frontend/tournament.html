@@ -373,7 +373,7 @@
     /* ─── 現代手遊級手把佈局 (比例式自適應) ─── */
     .controls {
       position: absolute;
-      bottom: 20px; left: 0; width: 100%;
+      bottom: max(34px, calc(env(safe-area-inset-bottom, 0px) + 26px)); left: 0; width: 100%;
       display: flex;
       justify-content: space-between;
       align-items: flex-end;
