@@ -1,15 +1,29 @@
 {
   "rules": {
-    ".read": "auth != null",
-    ".write": "auth != null",
     "players": {
-      ".indexOn": ["points", "lastSeen", "createdAt"]
+      ".indexOn": ["points", "lastSeen", "createdAt"],
+      ".read": "auth != null",
+      "$uid": {
+        ".write": "auth != null"
+      }
     },
     "rankedQueue": {
-      ".indexOn": ["createdAt", "status"]
+      ".indexOn": ["createdAt", "status"],
+      ".read": "auth != null",
+      "$key": {
+        ".write": "auth != null"
+      }
     },
     "rankedRooms": {
-      ".indexOn": ["createdAt", "status"]
+      ".indexOn": ["createdAt", "status"],
+      ".read": "auth != null",
+      "$roomId": {
+        ".write": "auth != null"
+      }
+    },
+    "tournamentRoom": {
+      ".read": "auth != null",
+      ".write": "auth != null"
     }
   }
 }
