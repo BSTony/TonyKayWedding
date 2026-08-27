@@ -1,6 +1,6 @@
 // Author: Tony Hsieh
 // Date: 2026-08-27
-// Version: 2.3.2
+// Version: 2.3.3
 import { PikaPhysics, PikaUserInput, processPlayerMovementAndSetPlayerPosition } from './physics.js';
 
 /**
@@ -323,7 +323,9 @@ export class BadmintonEngine {
     const isPredicted = (this.multiplayerRole === 'firebase' || this.multiplayerRole === 'cloud' || this.multiplayerRole === 'guest') && (this.cloudRole !== 'spectate');
     const isP1 = (this.cloudRole === 'p1');
     const isP2 = (this.cloudRole === 'p2');
-    const hardReset = !!(state.newRound || state.round === 'scoring' || state.round === 'game_over' || this.roundState !== 'playing');
+    // 只有開新局才拉回本人位置。落地得分時若立刻對齊，會在球還在空中時把人拖走。
+    const alignLocal = !!state.newRound;
+    const ballAlign = !!(state.newRound || state.round === 'scoring' || state.round === 'game_over');
 
     const applyActor = (actor, snap, isLocal, defaultDive) => {
       if (!snap) return;
@@ -334,8 +336,7 @@ export class BadmintonEngine {
       const sDive = snap.d !== undefined ? snap.d : (snap.divingDirection !== undefined ? snap.divingDirection : defaultDive);
 
       if (isPredicted && isLocal) {
-        // 本人角色只在換局/得分時對齊伺服器，對戰中絕不倒帶（否則會像回放）
-        if (hardReset) {
+        if (alignLocal) {
           actor.x = sX;
           actor.y = sY;
           actor.state = sState;
@@ -363,20 +364,20 @@ export class BadmintonEngine {
       const nrot = state.b.r !== undefined ? state.b.r : (state.b.rot || 0);
       const npower = state.b.p !== undefined ? !!state.b.p : !!state.b.power;
 
+      b.x = nx;
+      b.y = ny;
       b.xVelocity = nvx;
       b.yVelocity = nvy;
       b.rotation = nrot;
       b.isPowerHit = npower;
-      this.pushBallSnap(nx, ny, nvx, nvy, hardReset);
-      if (hardReset) {
-        b.x = nx;
-        b.y = ny;
-      }
+      this.pushBallSnap(nx, ny, nvx, nvy, ballAlign);
     }
 
-    if (hardReset) {
+    if (alignLocal) {
       this.smoothP1 = { x: p1.x, y: p1.y };
       this.smoothP2 = { x: p2.x, y: p2.y };
+      this.smoothBall = { x: b.x, y: b.y };
+    } else if (ballAlign) {
       this.smoothBall = { x: b.x, y: b.y };
     } else if (!this.smoothBall) {
       this.smoothP1 = { x: p1.x, y: p1.y };
@@ -428,28 +429,21 @@ export class BadmintonEngine {
     if (this._ballSnaps.length > 12) this._ballSnaps.shift();
   }
 
-  sampleBallVisual(delayMs = 48) {
+  sampleBallLive() {
     const snaps = this._ballSnaps;
     if (!snaps || !snaps.length) return null;
-    const at = performance.now() - delayMs;
-    if (at <= snaps[0].t) return { x: snaps[0].x, y: snaps[0].y };
     const last = snaps[snaps.length - 1];
-    if (at >= last.t) {
-      const dt = Math.min((at - last.t) / 33.333, 1.5);
-      let y = last.y + last.vy * dt + 0.5 * 0.8 * dt * dt;
-      if (y > 252) y = 252;
-      if (y < 0) y = 0;
-      return { x: last.x + last.vx * dt, y };
-    }
-    for (let i = 1; i < snaps.length; i++) {
-      if (at <= snaps[i].t) {
-        const a = snaps[i - 1];
-        const b = snaps[i];
-        const u = (at - a.t) / Math.max(1, b.t - a.t);
-        return { x: a.x + (b.x - a.x) * u, y: a.y + (b.y - a.y) * u };
-      }
-    }
-    return { x: last.x, y: last.y };
+    const dt = Math.min((performance.now() - last.t) / 33.333, 2);
+    let y = last.y + last.vy * dt + 0.5 * 0.8 * dt * dt;
+    if (y > 252) y = 252;
+    if (y < 0) y = 0;
+    return { x: last.x + last.vx * dt, y };
+  }
+
+  approachCoord(current, target, maxStep) {
+    const delta = target - current;
+    if (Math.abs(delta) <= maxStep) return target;
+    return current + Math.sign(delta) * maxStep;
   }
 
   stop() {
@@ -508,42 +502,12 @@ export class BadmintonEngine {
     // ── 客戶端多人連線模式 (Firebase / 雲端 WebSocket) ──
     if (this.multiplayerRole === 'firebase' || this.multiplayerRole === 'cloud' || this.multiplayerRole === 'guest') {
       const hit = this.powerHitBuffer > 0 ? 1 : 0;
-      const currentInputKey = `${this.keys.left ? 1 : 0},${this.keys.right ? 1 : 0},${this.keys.up ? 1 : 0},${this.keys.down ? 1 : 0},${hit}`;
+      const isP1 = (this.cloudRole === 'p1');
+      const myPlayer = isP1 ? this.pikaPhysics.player1 : this.pikaPhysics.player2;
+      const otherPlayer = isP1 ? this.pikaPhysics.player2 : this.pikaPhysics.player1;
 
-      // 1. 發送指令：WS 連線時只走 WebSocket（按鍵變動立即送、長按 33ms），不再塞 Firebase
-      const wsOpen = this.ws && this.ws.readyState === WebSocket.OPEN;
-      const inputInterval = wsOpen ? 33 : 90;
-      if (currentInputKey !== this.lastSentInputKey || hit || (now - this.lastInputSendTime > inputInterval)) {
-        this.lastInputSendTime = now;
-        this.lastSentInputKey = currentInputKey;
-        if (hit && this.powerHitBuffer > 0) this.powerHitBuffer--;
-
-        const inputPayload = {
-          left: !!this.keys.left,
-          right: !!this.keys.right,
-          up: !!this.keys.up,
-          down: !!this.keys.down,
-          powerHit: hit
-        };
-
-        if (wsOpen) {
-          this.ws.send(JSON.stringify({
-            type: 'input',
-            role: this.cloudRole,
-            input: inputPayload
-          }));
-        } else if (this.onSendInput) {
-          this.onSendInput(inputPayload);
-        }
-      }
-
-      // 2. 🌟 客戶端 0ms 即時預測響應 (Client-Side Input Prediction)
-      //    按下按鍵時本地立即運算本人皮卡丘的物理移動與跳躍，手感達到 0 延遲原生級即時！
+      // 先做本機移動，再把「畫面上的位置」送給伺服器判定，避免打到的是延遲後的舊座標
       if (this.roundState === 'playing') {
-        const isP1 = (this.cloudRole === 'p1');
-        const myPlayer = isP1 ? this.pikaPhysics.player1 : this.pikaPhysics.player2;
-        const otherPlayer = isP1 ? this.pikaPhysics.player2 : this.pikaPhysics.player1;
-
         const myInput = new PikaUserInput();
         if (this.keys.left)  myInput.xDirection = -1;
         if (this.keys.right) myInput.xDirection = 1;
@@ -560,6 +524,37 @@ export class BadmintonEngine {
           otherPlayer,
           this.pikaPhysics.ball
         );
+      }
+
+      const currentInputKey = `${this.keys.left ? 1 : 0},${this.keys.right ? 1 : 0},${this.keys.up ? 1 : 0},${this.keys.down ? 1 : 0},${hit}`;
+      const wsOpen = this.ws && this.ws.readyState === WebSocket.OPEN;
+      const inputInterval = wsOpen ? 33 : 90;
+      if (currentInputKey !== this.lastSentInputKey || hit || (now - this.lastInputSendTime > inputInterval)) {
+        this.lastInputSendTime = now;
+        this.lastSentInputKey = currentInputKey;
+        if (hit && this.powerHitBuffer > 0) this.powerHitBuffer--;
+
+        const inputPayload = {
+          left: !!this.keys.left,
+          right: !!this.keys.right,
+          up: !!this.keys.up,
+          down: !!this.keys.down,
+          powerHit: hit,
+          x: Math.round(myPlayer.x * 10) / 10,
+          y: Math.round(myPlayer.y * 10) / 10,
+          s: myPlayer.state,
+          d: myPlayer.divingDirection
+        };
+
+        if (wsOpen) {
+          this.ws.send(JSON.stringify({
+            type: 'input',
+            role: this.cloudRole,
+            input: inputPayload
+          }));
+        } else if (this.onSendInput) {
+          this.onSendInput(inputPayload);
+        }
       }
       return;
     }
@@ -817,25 +812,17 @@ export class BadmintonEngine {
       else this.smoothP2.y += (targetP2Y - this.smoothP2.y) * smoothFactor;
     }
 
-    // 羽毛球：用快照插值連續飛行，避免瞬間傳送
-    const sampled = this.sampleBallVisual(48);
-    if (sampled) {
-      this.smoothBall.x = sampled.x;
-      this.smoothBall.y = sampled.y;
-      this.pikaPhysics.ball.x = sampled.x;
-      this.pikaPhysics.ball.y = sampled.y;
-    } else if (this.ballServerPos && this.roundState === 'playing') {
-      const ballElapsed = Math.max(0, performance.now() - this.ballServerPos.time);
-      const tFrames = Math.min(ballElapsed / 33.333, 8);
-      const gravity = 0.8;
-      const estX = this.ballServerPos.x + this.ballServerPos.vx * tFrames;
-      let estY = this.ballServerPos.y + this.ballServerPos.vy * tFrames + 0.5 * gravity * tFrames * tFrames;
-      if (estY > 252) estY = 252;
-      this.smoothBall.x += (estX - this.smoothBall.x) * smoothFactor;
-      this.smoothBall.y += (estY - this.smoothBall.y) * smoothFactor;
+    // 羽毛球：跟最新伺服器位置外推，並限制每幀位移，避免瞬移也不讓畫面落後判定
+    const liveBall = this.sampleBallLive();
+    const ballX = liveBall ? liveBall.x : targetBallX;
+    const ballY = liveBall ? liveBall.y : targetBallY;
+    if (this.roundState === 'scoring' || this.roundState === 'game_over') {
+      this.smoothBall.x = ballX;
+      this.smoothBall.y = ballY;
     } else {
-      this.smoothBall.x += (targetBallX - this.smoothBall.x) * smoothFactor;
-      this.smoothBall.y += (targetBallY - this.smoothBall.y) * smoothFactor;
+      const maxStep = 18 * dtRatio;
+      this.smoothBall.x = this.approachCoord(this.smoothBall.x, ballX, maxStep);
+      this.smoothBall.y = this.approachCoord(this.smoothBall.y, ballY, maxStep);
     }
   }
 

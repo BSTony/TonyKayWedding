@@ -1,6 +1,6 @@
 // Author: Tony Hsieh
 // Date: 2026-08-27
-// Version: 1.4.0
+// Version: 1.4.1
 import http from 'http';
 import express from 'express';
 import { WebSocketServer, WebSocket } from 'ws';
@@ -82,6 +82,82 @@ signInAnonymously(auth).then(() => {
 
 // 雲端房間物理實例表
 const activeFirebaseRooms = {};
+const wsRooms = {};
+
+const PLAYER_HALF_LENGTH = 32;
+const GROUND_HALF_WIDTH = 216;
+const GROUND_WIDTH = 432;
+const GROUND_Y = 244;
+const NET_SYNC_MAX_DELTA = 120;
+
+function applyClientInput(room, role, input) {
+  if (!room || !input) return;
+  const isP2 = role === 'p2';
+  const key = isP2 ? 'p2Raw' : 'p1Raw';
+  room[key] = { ...input };
+  if (input.powerHit) {
+    if (isP2) room.p2HitHold = 4;
+    else room.p1HitHold = 4;
+  }
+}
+
+function fillUserInput(dest, raw, isP2, hitHold) {
+  dest.xDirection = 0;
+  if (raw.left) dest.xDirection = -1;
+  if (raw.right) dest.xDirection = 1;
+  dest.yDirection = 0;
+  if (raw.up) dest.yDirection = -1;
+  if (raw.down) dest.yDirection = 1;
+  dest.powerHit = (raw.powerHit || hitHold > 0) ? 1 : 0;
+  if (dest.powerHit && dest.yDirection === 1 && dest.xDirection === 0) {
+    dest.xDirection = isP2 ? -1 : 1;
+  }
+}
+
+function reconcilePlayerFromClient(player, raw, isP2) {
+  const x = Number(raw && raw.x);
+  const y = Number(raw && raw.y);
+  if (!Number.isFinite(x) || !Number.isFinite(y)) return;
+  const minX = isP2 ? GROUND_HALF_WIDTH + PLAYER_HALF_LENGTH : PLAYER_HALF_LENGTH;
+  const maxX = isP2 ? GROUND_WIDTH - PLAYER_HALF_LENGTH : GROUND_HALF_WIDTH - PLAYER_HALF_LENGTH;
+  if (x < minX - 12 || x > maxX + 12) return;
+  const nx = Math.max(minX, Math.min(maxX, x));
+  const ny = Math.max(0, Math.min(GROUND_Y, y));
+  player._netSync = true;
+  player._netX = player.x + Math.max(-NET_SYNC_MAX_DELTA, Math.min(NET_SYNC_MAX_DELTA, nx - player.x));
+  player._netY = player.y + Math.max(-NET_SYNC_MAX_DELTA, Math.min(NET_SYNC_MAX_DELTA, ny - player.y));
+  const st = Number(raw.s);
+  if (Number.isFinite(st) && st >= 0 && st <= 6) player.state = st;
+  if (Number.isFinite(Number(raw.d))) player.divingDirection = Number(raw.d);
+}
+
+function packRoomState(roomState, extra = {}) {
+  const p1 = roomState.physics.player1;
+  const p2 = roomState.physics.player2;
+  const b = roomState.physics.ball;
+  return {
+    t: 's',
+    ts: Date.now(),
+    p1: { x: p1.x, y: p1.y, s: p1.state, f: p1.frameNumber, d: p1.divingDirection },
+    p2: { x: p2.x, y: p2.y, s: p2.state, f: p2.frameNumber, d: p2.divingDirection },
+    b: {
+      x: b.x, y: b.y, vx: b.xVelocity, vy: b.yVelocity, rot: b.rotation, power: b.isPowerHit,
+      px: b.previousX, py: b.previousY
+    },
+    s1: roomState.s1,
+    s2: roomState.s2,
+    round: roomState.roundState,
+    ...extra
+  };
+}
+
+function broadcastWs(roomId, payload) {
+  const sockets = wsRooms[roomId];
+  if (!sockets) return;
+  const raw = JSON.stringify(payload);
+  if (sockets.p1 && sockets.p1.readyState === WebSocket.OPEN) sockets.p1.send(raw);
+  if (sockets.p2 && sockets.p2.readyState === WebSocket.OPEN) sockets.p2.send(raw);
+}
 
 console.log('⚡ 雲端物理裁判伺服器正在連線至 Firebase RTDB...');
 
@@ -130,6 +206,8 @@ function startServerRoomSimulation(roomId, roomData) {
     p2Input,
     p1Raw: { left: false, right: false, up: false, down: false, powerHit: 0 },
     p2Raw: { left: false, right: false, up: false, down: false, powerHit: 0 },
+    p1HitHold: 0,
+    p2HitHold: 0,
     s1: 0,
     s2: 0,
     maxScore: roomData.maxScore || 5,
@@ -147,19 +225,17 @@ function startServerRoomSimulation(roomId, roomData) {
   // 監聽 1P 輸入 (Host 玩家，寫到 p1Input)
   const unsubsP1 = onValue(ref(db, `rankedRooms/${roomId}/p1Input`), (snap) => {
     const inp = snap.val();
-    if (inp) roomState.p1Raw = { ...inp };
+    if (inp) applyClientInput(roomState, 'p1', inp);
   });
 
-  // 監聽 2P 輸入 (Guest 玩家，寫到 p2Input)
   const unsubsP2 = onValue(ref(db, `rankedRooms/${roomId}/p2Input`), (snap) => {
     const inp = snap.val();
-    if (inp) roomState.p2Raw = { ...inp };
+    if (inp) applyClientInput(roomState, 'p2', inp);
   });
 
-  // 同時兼容舊版 guestInput key
   const unsubsP2Legacy = onValue(ref(db, `rankedRooms/${roomId}/guestInput`), (snap) => {
     const inp = snap.val();
-    if (inp) roomState.p2Raw = { ...inp };
+    if (inp) applyClientInput(roomState, 'p2', inp);
   });
 
   roomState.unsubs = [unsubsP1, unsubsP2, unsubsP2Legacy];
@@ -172,34 +248,16 @@ function startServerRoomSimulation(roomId, roomData) {
     const p2 = physics.player2;
     const b = physics.ball;
 
-    // 處理 1P 輸入
-    p1Input.xDirection = 0;
-    if (roomState.p1Raw.left)  p1Input.xDirection = -1;
-    if (roomState.p1Raw.right) p1Input.xDirection = 1;
-    p1Input.yDirection = 0;
-    if (roomState.p1Raw.up)    p1Input.yDirection = -1;
-    if (roomState.p1Raw.down)  p1Input.yDirection = 1;
-    p1Input.powerHit = roomState.p1Raw.powerHit ? 1 : 0;
-    if (roomState.p1Raw.powerHit && p1.state === 0 && p1Input.yDirection === 1 && p1Input.xDirection === 0) {
-      p1Input.xDirection = 1;
-    }
-    if (roomState.p1Raw.powerHit > 0) roomState.p1Raw.powerHit--;
-
-    // 處理 2P 輸入
-    p2Input.xDirection = 0;
-    if (roomState.p2Raw.left)  p2Input.xDirection = -1;
-    if (roomState.p2Raw.right) p2Input.xDirection = 1;
-    p2Input.yDirection = 0;
-    if (roomState.p2Raw.up)    p2Input.yDirection = -1;
-    if (roomState.p2Raw.down)  p2Input.yDirection = 1;
-    p2Input.powerHit = roomState.p2Raw.powerHit ? 1 : 0;
-    if (roomState.p2Raw.powerHit && p2.state === 0 && p2Input.yDirection === 1 && p2Input.xDirection === 0) {
-      p2Input.xDirection = -1;
-    }
-    if (roomState.p2Raw.powerHit > 0) roomState.p2Raw.powerHit--;
+    fillUserInput(p1Input, roomState.p1Raw, false, roomState.p1HitHold);
+    fillUserInput(p2Input, roomState.p2Raw, true, roomState.p2HitHold);
+    if (roomState.p1HitHold > 0) roomState.p1HitHold--;
+    if (roomState.p2HitHold > 0) roomState.p2HitHold--;
+    reconcilePlayerFromClient(p1, roomState.p1Raw, false);
+    reconcilePlayerFromClient(p2, roomState.p2Raw, true);
 
     const prevPunch = b.punchEffectRadius;
     const isTouchingGround = physics.runEngineForNextFrame([p1Input, p2Input]);
+    const playerSavedBall = !!(p1.isCollisionWithBallHappened || p2.isCollisionWithBallHappened);
 
     let punchEvent = null;
     if (b.punchEffectRadius > 0 && prevPunch === 0) {
@@ -207,7 +265,11 @@ function startServerRoomSimulation(roomId, roomData) {
       b.punchEffectRadius = 0;
     }
 
-    if (isTouchingGround) {
+    // 球落地與角色接球若在同一幀，以接球為準，避免人站在球下卻直接給分
+    if (isTouchingGround && playerSavedBall) {
+      if (b.y >= 252) b.y = 236;
+      if (b.yVelocity >= 0) b.yVelocity = -Math.max(12, Math.abs(b.yVelocity));
+    } else if (isTouchingGround) {
       b.isPowerHit = false;
       punchEvent = { x: b.x, y: 252, isPower: false };
 
@@ -268,6 +330,7 @@ function startServerRoomSimulation(roomId, roomData) {
             ts: Date.now()
           };
           set(ref(db, `rankedRooms/${roomId}/state`), newRoundState).catch(() => {});
+          broadcastWs(roomId, packRoomState(roomState, { newRound: true }));
         }, 1100);
       }
     }
@@ -334,7 +397,6 @@ function stopServerRoomSimulation(roomId) {
 
 // ── WebSocket 連線閘道 (極速直連通道) ──
 const wss = new WebSocketServer({ server, perMessageDeflate: false });
-const wsRooms = {};
 
 wss.on('connection', (ws) => {
   let joinedRoomId = null;
@@ -354,11 +416,7 @@ wss.on('connection', (ws) => {
         if (!wsRooms[joinedRoomId]) wsRooms[joinedRoomId] = {};
         wsRooms[joinedRoomId][clientRole] = ws;
       } else if (data.type === 'input') {
-        const room = activeFirebaseRooms[joinedRoomId];
-        if (room && data.input) {
-          if (data.role === 'p1') room.p1Raw = { ...data.input };
-          if (data.role === 'p2') room.p2Raw = { ...data.input };
-        }
+        applyClientInput(activeFirebaseRooms[joinedRoomId], data.role || clientRole, data.input);
       }
     } catch (e) {}
   });

@@ -1,3 +1,6 @@
+// Author: Tony Hsieh
+// Date: 2026-08-27
+// Version: 1.4.1
 /**
  * The Model part in the MVC pattern
  *
@@ -505,8 +508,15 @@ function processPlayerMovementAndSetPlayerPosition(
     letComputerDecideUserInput(player, ball, theOtherPlayer, userInput);
   }
 
+  const netSync = player._netSync === true;
+  if (netSync) {
+    player.x = player._netX;
+    player.y = player._netY;
+    player._netSync = false;
+  }
+
   // if player is lying down.. don't move
-  if (player.state === 4) {
+  if (player.state === 4 && !netSync) {
     player.lyingDownDurationLeft += -1;
     if (player.lyingDownDurationLeft < -1) {
       player.state = 0;
@@ -516,37 +526,38 @@ function processPlayerMovementAndSetPlayerPosition(
 
   // process x-direction movement
   let playerVelocityX = 0;
-  if (player.state < 5) {
-    if (player.state < 3) {
-      playerVelocityX = userInput.xDirection * 6;
-    } else {
-      // player.state === 3 i.e. player is diving..
-      playerVelocityX = player.divingDirection * 8;
+  if (!netSync) {
+    if (player.state < 5) {
+      if (player.state < 3) {
+        playerVelocityX = userInput.xDirection * 6;
+      } else {
+        // player.state === 3 i.e. player is diving..
+        playerVelocityX = player.divingDirection * 8;
+      }
     }
+    player.x = player.x + playerVelocityX;
   }
-
-  const futurePlayerX = player.x + playerVelocityX;
-  player.x = futurePlayerX;
 
   // process player's x-direction world boundary
   if (player.isPlayer2 === false) {
     // if player is player1
-    if (futurePlayerX < PLAYER_HALF_LENGTH) {
+    if (player.x < PLAYER_HALF_LENGTH) {
       player.x = PLAYER_HALF_LENGTH;
-    } else if (futurePlayerX > GROUND_HALF_WIDTH - PLAYER_HALF_LENGTH) {
+    } else if (player.x > GROUND_HALF_WIDTH - PLAYER_HALF_LENGTH) {
       player.x = GROUND_HALF_WIDTH - PLAYER_HALF_LENGTH;
     }
   } else {
     // if player is player2
-    if (futurePlayerX < GROUND_HALF_WIDTH + PLAYER_HALF_LENGTH) {
+    if (player.x < GROUND_HALF_WIDTH + PLAYER_HALF_LENGTH) {
       player.x = GROUND_HALF_WIDTH + PLAYER_HALF_LENGTH;
-    } else if (futurePlayerX > GROUND_WIDTH - PLAYER_HALF_LENGTH) {
+    } else if (player.x > GROUND_WIDTH - PLAYER_HALF_LENGTH) {
       player.x = GROUND_WIDTH - PLAYER_HALF_LENGTH;
     }
   }
 
   // jump
   if (
+    !netSync &&
     player.state < 3 &&
     userInput.yDirection === -1 && // up-direction input
     player.y === PLAYER_TOUCHING_GROUND_Y_COORD // player is touching on the ground
@@ -558,26 +569,38 @@ function processPlayerMovementAndSetPlayerPosition(
     // refer to a detailed comment above about this function
     // maybe-sound code function (playerpointer + 0x90 + 0x10)? omitted
     player.sound.chu = true;
+  } else if (
+    netSync &&
+    player.state < 3 &&
+    userInput.yDirection === -1 &&
+    player.y < PLAYER_TOUCHING_GROUND_Y_COORD
+  ) {
+    player.state = 1;
   }
 
   // gravity
-  const futurePlayerY = player.y + player.yVelocity;
-  player.y = futurePlayerY;
-  if (futurePlayerY < PLAYER_TOUCHING_GROUND_Y_COORD) {
-    player.yVelocity += 1;
-  } else if (futurePlayerY > PLAYER_TOUCHING_GROUND_Y_COORD) {
-    // if player is landing..
+  if (!netSync) {
+    const futurePlayerY = player.y + player.yVelocity;
+    player.y = futurePlayerY;
+    if (futurePlayerY < PLAYER_TOUCHING_GROUND_Y_COORD) {
+      player.yVelocity += 1;
+    } else if (futurePlayerY > PLAYER_TOUCHING_GROUND_Y_COORD) {
+      // if player is landing..
+      player.yVelocity = 0;
+      player.y = PLAYER_TOUCHING_GROUND_Y_COORD;
+      player.frameNumber = 0;
+      if (player.state === 3) {
+        // if player is diving..
+        player.state = 4;
+        player.frameNumber = 0;
+        player.lyingDownDurationLeft = 3;
+      } else {
+        player.state = 0;
+      }
+    }
+  } else if (player.y > PLAYER_TOUCHING_GROUND_Y_COORD) {
     player.yVelocity = 0;
     player.y = PLAYER_TOUCHING_GROUND_Y_COORD;
-    player.frameNumber = 0;
-    if (player.state === 3) {
-      // if player is diving..
-      player.state = 4;
-      player.frameNumber = 0;
-      player.lyingDownDurationLeft = 3;
-    } else {
-      player.state = 0;
-    }
   }
 
   if (userInput.powerHit === 1) {
