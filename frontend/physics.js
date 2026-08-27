@@ -1,6 +1,6 @@
 // Author: Tony Hsieh
 // Date: 2026-08-27
-// Version: 1.4.4
+// Version: 1.4.7
 /**
  * The Model part in the MVC pattern
  *
@@ -52,8 +52,8 @@ const NET_PILLAR_HALF_WIDTH = 25;
 const NET_PILLAR_TOP_TOP_Y_COORD = 176;
 /** @constant @type {number} net pillar top's bottom side y coordinate (this value is on this physics engine only) */
 const NET_PILLAR_TOP_BOTTOM_Y_COORD = 192;
-/** @constant @type {number} 擊球速度比例 (放慢 20% = 0.8) */
-export const BALL_SPEED_SCALE = 0.8;
+/** @constant @type {number} 原版每幀重力增量（與皮卡丘排球一致） */
+export const BALL_SPEED_SCALE = 1;
 
 /**
  * It's for to limit the looping number of the infinite loops.
@@ -703,11 +703,10 @@ function processCollisionBetweenBallAndPlayer(
   playerState
 ) {
   // playerX is pika's x position
-  // 擊球水平速度放慢 20%
   if (ball.x < playerX) {
-    ball.xVelocity = -Math.round((Math.abs(ball.x - playerX) / 3) * BALL_SPEED_SCALE);
+    ball.xVelocity = -Math.abs(ball.x - playerX) / 3;
   } else if (ball.x > playerX) {
-    ball.xVelocity = Math.round((Math.abs(ball.x - playerX) / 3) * BALL_SPEED_SCALE);
+    ball.xVelocity = Math.abs(ball.x - playerX) / 3;
   }
 
   // If ball velocity x is 0, randomly choose one of -1, 0, 1.
@@ -716,25 +715,23 @@ function processCollisionBetweenBallAndPlayer(
   }
 
   const ballAbsYVelocity = Math.abs(ball.yVelocity);
-  ball.yVelocity = -Math.round(ballAbsYVelocity * BALL_SPEED_SCALE);
+  ball.yVelocity = -ballAbsYVelocity;
 
-  const minLaunchY = Math.round(15 * BALL_SPEED_SCALE);
-  if (Math.abs(ball.yVelocity) < minLaunchY) {
-    ball.yVelocity = -minLaunchY;
+  if (ballAbsYVelocity < 15) {
+    ball.yVelocity = -15;
   }
 
-  // player is jumping and power hitting (殺球速度放慢 20%)
+  // player is jumping and power hitting
   if (playerState === 2) {
-    const spikeSpeedX = Math.round((Math.abs(userInput.xDirection) + 1) * 10 * BALL_SPEED_SCALE);
     if (ball.x < GROUND_HALF_WIDTH) {
-      ball.xVelocity = spikeSpeedX;
+      ball.xVelocity = (Math.abs(userInput.xDirection) + 1) * 10;
     } else {
-      ball.xVelocity = -spikeSpeedX;
+      ball.xVelocity = -(Math.abs(userInput.xDirection) + 1) * 10;
     }
     ball.punchEffectX = ball.x;
     ball.punchEffectY = ball.y;
 
-    ball.yVelocity = Math.round(Math.abs(ball.yVelocity) * userInput.yDirection * 2 * BALL_SPEED_SCALE);
+    ball.yVelocity = Math.abs(ball.yVelocity) * userInput.yDirection * 2;
     ball.punchEffectRadius = BALL_RADIUS;
     // maybe-stereo-sound function FUN_00408470 (0x90) omitted:
     // refer to a detailed comment above about this function

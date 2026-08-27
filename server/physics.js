@@ -1,6 +1,6 @@
 // Author: Tony Hsieh
 // Date: 2026-08-27
-// Version: 1.4.6
+// Version: 1.4.7
 /**
  * The Model part in the MVC pattern
  *
@@ -52,8 +52,8 @@ const NET_PILLAR_HALF_WIDTH = 25;
 const NET_PILLAR_TOP_TOP_Y_COORD = 176;
 /** @constant @type {number} net pillar top's bottom side y coordinate (this value is on this physics engine only) */
 const NET_PILLAR_TOP_BOTTOM_Y_COORD = 192;
-/** @constant @type {number} 擊球速度比例 (放慢 20% = 0.8) */
-export const BALL_SPEED_SCALE = 0.8;
+/** @constant @type {number} 原版每幀重力增量（與皮卡丘排球一致） */
+export const BALL_SPEED_SCALE = 1;
 
 /**
  * It's for to limit the looping number of the infinite loops.
@@ -364,8 +364,6 @@ function physicsEngine(player1, player2, ball, userInputArray) {
         );
         player.isCollisionWithBallHappened = true;
       }
-      // 球心已進角色體內時強制推出，避免「貼太近就穿模」
-      separateBallFromPlayer(ball, player.x, player.y);
     } else {
       player.isCollisionWithBallHappened = false;
     }
@@ -387,41 +385,14 @@ function physicsEngine(player1, player2, ball, userInputArray) {
  * @return {boolean}
  */
 function isCollisionBetweenBallAndPlayerHappened(ball, playerX, playerY) {
-  const reach = PLAYER_HALF_LENGTH;
-  const hits = (bx, by) =>
-    Number.isFinite(bx) && Number.isFinite(by) &&
-    Math.abs(bx - playerX) <= reach &&
-    Math.abs(by - playerY) <= reach;
-  if (hits(ball.x, ball.y)) return true;
-  const x0 = Number.isFinite(ball.previousX) ? ball.previousX : ball.x;
-  const y0 = Number.isFinite(ball.previousY) ? ball.previousY : ball.y;
-  if (hits(x0, y0)) return true;
-  for (let i = 1; i <= 4; i++) {
-    const u = i / 5;
-    if (hits(x0 + (ball.x - x0) * u, y0 + (ball.y - y0) * u)) return true;
+  let diff = ball.x - playerX;
+  if (Math.abs(diff) <= PLAYER_HALF_LENGTH) {
+    diff = ball.y - playerY;
+    if (Math.abs(diff) <= PLAYER_HALF_LENGTH) {
+      return true;
+    }
   }
   return false;
-}
-
-function separateBallFromPlayer(ball, playerX, playerY) {
-  const reach = PLAYER_HALF_LENGTH + 2;
-  const dx = ball.x - playerX;
-  const dy = ball.y - playerY;
-  const overlapX = reach - Math.abs(dx);
-  const overlapY = reach - Math.abs(dy);
-  if (overlapX <= 0 || overlapY <= 0) return;
-  if (overlapX < overlapY) {
-    const dir = dx !== 0 ? Math.sign(dx) : (playerX < GROUND_HALF_WIDTH ? -1 : 1);
-    ball.x = playerX + dir * reach;
-  } else {
-    const dir = dy !== 0 ? Math.sign(dy) : (ball.yVelocity < 0 ? -1 : 1);
-    ball.y = playerY + dir * reach;
-    if (ball.y > BALL_TOUCHING_GROUND_Y_COORD - 2) {
-      ball.y = BALL_TOUCHING_GROUND_Y_COORD - 2;
-      if (ball.yVelocity > 0) ball.yVelocity = -Math.max(8, Math.abs(ball.yVelocity));
-    }
-    if (ball.y < 0) ball.y = 0;
-  }
 }
 
 /**
@@ -558,12 +529,11 @@ function processPlayerMovementAndSetPlayerPosition(
   const netSync = player._netSync === true;
   if (netSync) {
     player.x = player._netX;
-    player.y = player._netY;
     player._netSync = false;
   }
 
   // if player is lying down.. don't move
-  if (player.state === 4 && !netSync) {
+  if (player.state === 4) {
     player.lyingDownDurationLeft += -1;
     if (player.lyingDownDurationLeft < -1) {
       player.state = 0;
@@ -578,7 +548,6 @@ function processPlayerMovementAndSetPlayerPosition(
       if (player.state < 3) {
         playerVelocityX = userInput.xDirection * 6;
       } else {
-        // player.state === 3 i.e. player is diving..
         playerVelocityX = player.divingDirection * 8;
       }
     }
@@ -604,50 +573,32 @@ function processPlayerMovementAndSetPlayerPosition(
 
   // jump
   if (
-    !netSync &&
     player.state < 3 &&
-    userInput.yDirection === -1 && // up-direction input
-    player.y === PLAYER_TOUCHING_GROUND_Y_COORD // player is touching on the ground
+    userInput.yDirection === -1 &&
+    player.y === PLAYER_TOUCHING_GROUND_Y_COORD
   ) {
     player.yVelocity = -16;
     player.state = 1;
     player.frameNumber = 0;
-    // maybe-stereo-sound function FUN_00408470 (0x90) omitted:
-    // refer to a detailed comment above about this function
-    // maybe-sound code function (playerpointer + 0x90 + 0x10)? omitted
     player.sound.chu = true;
-  } else if (
-    netSync &&
-    player.state < 3 &&
-    userInput.yDirection === -1 &&
-    player.y < PLAYER_TOUCHING_GROUND_Y_COORD
-  ) {
-    player.state = 1;
   }
 
   // gravity
-  if (!netSync) {
-    const futurePlayerY = player.y + player.yVelocity;
-    player.y = futurePlayerY;
-    if (futurePlayerY < PLAYER_TOUCHING_GROUND_Y_COORD) {
-      player.yVelocity += 1;
-    } else if (futurePlayerY > PLAYER_TOUCHING_GROUND_Y_COORD) {
-      // if player is landing..
-      player.yVelocity = 0;
-      player.y = PLAYER_TOUCHING_GROUND_Y_COORD;
-      player.frameNumber = 0;
-      if (player.state === 3) {
-        // if player is diving..
-        player.state = 4;
-        player.frameNumber = 0;
-        player.lyingDownDurationLeft = 3;
-      } else {
-        player.state = 0;
-      }
-    }
-  } else if (player.y > PLAYER_TOUCHING_GROUND_Y_COORD) {
+  const futurePlayerY = player.y + player.yVelocity;
+  player.y = futurePlayerY;
+  if (futurePlayerY < PLAYER_TOUCHING_GROUND_Y_COORD) {
+    player.yVelocity += 1;
+  } else if (futurePlayerY > PLAYER_TOUCHING_GROUND_Y_COORD) {
     player.yVelocity = 0;
     player.y = PLAYER_TOUCHING_GROUND_Y_COORD;
+    player.frameNumber = 0;
+    if (player.state === 3) {
+      player.state = 4;
+      player.frameNumber = 0;
+      player.lyingDownDurationLeft = 3;
+    } else {
+      player.state = 0;
+    }
   }
 
   if (userInput.powerHit === 1) {
@@ -754,11 +705,10 @@ function processCollisionBetweenBallAndPlayer(
   playerState
 ) {
   // playerX is pika's x position
-  // 擊球水平速度放慢 20%
   if (ball.x < playerX) {
-    ball.xVelocity = -Math.round((Math.abs(ball.x - playerX) / 3) * BALL_SPEED_SCALE);
+    ball.xVelocity = -Math.abs(ball.x - playerX) / 3;
   } else if (ball.x > playerX) {
-    ball.xVelocity = Math.round((Math.abs(ball.x - playerX) / 3) * BALL_SPEED_SCALE);
+    ball.xVelocity = Math.abs(ball.x - playerX) / 3;
   }
 
   // If ball velocity x is 0, randomly choose one of -1, 0, 1.
@@ -767,25 +717,23 @@ function processCollisionBetweenBallAndPlayer(
   }
 
   const ballAbsYVelocity = Math.abs(ball.yVelocity);
-  ball.yVelocity = -Math.round(ballAbsYVelocity * BALL_SPEED_SCALE);
+  ball.yVelocity = -ballAbsYVelocity;
 
-  const minLaunchY = Math.round(15 * BALL_SPEED_SCALE);
-  if (Math.abs(ball.yVelocity) < minLaunchY) {
-    ball.yVelocity = -minLaunchY;
+  if (ballAbsYVelocity < 15) {
+    ball.yVelocity = -15;
   }
 
-  // player is jumping and power hitting (殺球速度放慢 20%)
+  // player is jumping and power hitting
   if (playerState === 2) {
-    const spikeSpeedX = Math.round((Math.abs(userInput.xDirection) + 1) * 10 * BALL_SPEED_SCALE);
     if (ball.x < GROUND_HALF_WIDTH) {
-      ball.xVelocity = spikeSpeedX;
+      ball.xVelocity = (Math.abs(userInput.xDirection) + 1) * 10;
     } else {
-      ball.xVelocity = -spikeSpeedX;
+      ball.xVelocity = -(Math.abs(userInput.xDirection) + 1) * 10;
     }
     ball.punchEffectX = ball.x;
     ball.punchEffectY = ball.y;
 
-    ball.yVelocity = Math.round(Math.abs(ball.yVelocity) * userInput.yDirection * 2 * BALL_SPEED_SCALE);
+    ball.yVelocity = Math.abs(ball.yVelocity) * userInput.yDirection * 2;
     ball.punchEffectRadius = BALL_RADIUS;
     // maybe-stereo-sound function FUN_00408470 (0x90) omitted:
     // refer to a detailed comment above about this function

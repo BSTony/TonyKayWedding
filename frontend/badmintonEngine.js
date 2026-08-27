@@ -1,6 +1,6 @@
 // Author: Tony Hsieh
 // Date: 2026-08-27
-// Version: 2.3.8
+// Version: 2.3.9
 import { PikaPhysics, PikaUserInput, processPlayerMovementAndSetPlayerPosition } from './physics.js';
 
 /**
@@ -81,9 +81,9 @@ export class BadmintonEngine {
       color: Math.random() > 0.4 ? 'rgba(255, 182, 193, 0.85)' : 'rgba(255, 240, 245, 0.92)'
     }));
 
-    // 遊戲速度放慢 20% (由 30 FPS 調降至 24 FPS，反應更充裕舒適)
+    // 與原版皮卡丘排球相同：30 FPS 固定物理步
     this.lastFrameTime = 0;
-    this.fpsInterval = 1000 / 24;
+    this.fpsInterval = 1000 / 30;
 
     // 回呼
     this.onScoreUpdate = null;
@@ -785,16 +785,9 @@ export class BadmintonEngine {
     const isP1 = (this.cloudRole === 'p1');
     const isP2 = (this.cloudRole === 'p2');
 
-    // 本人角色立刻跟上預測座標，避免被平滑算法拖成「鈍鈍的」
+    // 本人角色立刻跟上預測座標，不額外前推，避免視覺上「人先進球還停在頭上」
     if (isP1) {
-      let x = targetP1X;
-      if (this.roundState === 'playing') {
-        if (this.keys.right) x += 4;
-        if (this.keys.left) x -= 4;
-        if (x < 32) x = 32;
-        if (x > 184) x = 184;
-      }
-      this.smoothP1.x = x;
+      this.smoothP1.x = targetP1X;
       this.smoothP1.y = targetP1Y;
     } else {
       if (Math.abs(this.smoothP1.x - targetP1X) > 8) this.smoothP1.x = targetP1X;
@@ -804,14 +797,7 @@ export class BadmintonEngine {
     }
 
     if (isP2) {
-      let x = targetP2X;
-      if (this.roundState === 'playing') {
-        if (this.keys.right) x += 4;
-        if (this.keys.left) x -= 4;
-        if (x < 248) x = 248;
-        if (x > 400) x = 400;
-      }
-      this.smoothP2.x = x;
+      this.smoothP2.x = targetP2X;
       this.smoothP2.y = targetP2Y;
     } else {
       if (Math.abs(this.smoothP2.x - targetP2X) > 8) this.smoothP2.x = targetP2X;
@@ -820,18 +806,9 @@ export class BadmintonEngine {
       else this.smoothP2.y += (targetP2Y - this.smoothP2.y) * smoothFactor;
     }
 
-    // 羽毛球緊跟伺服器，並補半幀速度，減少「鈍鈍的」延遲感
-    if (this.roundState === 'scoring' || this.roundState === 'game_over' ||
-        Math.abs(this.smoothBall.x - targetBallX) > 28 ||
-        Math.abs(this.smoothBall.y - targetBallY) > 28) {
-      this.smoothBall.x = targetBallX;
-      this.smoothBall.y = targetBallY;
-    } else {
-      const leadX = targetBallX + b.xVelocity * 0.85;
-      const leadY = Math.min(252, Math.max(0, targetBallY + b.yVelocity * 0.85));
-      this.smoothBall.x = leadX;
-      this.smoothBall.y = leadY;
-    }
+    // 球畫伺服器座標，不外推，避免擊球當下看起來停在頭上再飛走
+    this.smoothBall.x = targetBallX;
+    this.smoothBall.y = targetBallY;
   }
 
   drawTiledSprite(name, rectX, rectY, rectW, rectH) {

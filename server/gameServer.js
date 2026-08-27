@@ -1,6 +1,6 @@
 // Author: Tony Hsieh
 // Date: 2026-08-27
-// Version: 1.4.6
+// Version: 1.4.7
 import http from 'http';
 import express from 'express';
 import { WebSocketServer, WebSocket } from 'ws';
@@ -137,13 +137,11 @@ function reconcilePlayerFromClient(player, raw, isP2, ball) {
   const maxX = isP2 ? GROUND_WIDTH - PLAYER_HALF_LENGTH : GROUND_HALF_WIDTH - PLAYER_HALF_LENGTH;
   if (x < minX - 12 || x > maxX + 12) return;
   const nx = Math.max(minX, Math.min(maxX, x));
-  const ny = Math.max(0, Math.min(GROUND_Y, y));
   const spawnX = isP2 ? GROUND_WIDTH - 36 : 36;
   // 發球剛開始時拒絕上一球殘留的中場座標，避免一端回原點、另一端還站在舊位置
   if (ball && ball.y < 64 && Math.abs(nx - spawnX) > 72) return;
   player._netSync = true;
   player._netX = player.x + Math.max(-NET_SYNC_MAX_DELTA, Math.min(NET_SYNC_MAX_DELTA, nx - player.x));
-  player._netY = player.y + Math.max(-NET_SYNC_MAX_DELTA, Math.min(NET_SYNC_MAX_DELTA, ny - player.y));
   const st = Number(raw.s);
   if (Number.isFinite(st) && st >= 0 && st <= 6) player.state = st;
   if (Number.isFinite(Number(raw.d))) player.divingDirection = Number(raw.d);
@@ -281,37 +279,21 @@ function startServerRoomSimulation(roomId, roomData) {
     if (roomState.ignoreClientPos > 0) {
       roomState.ignoreClientPos--;
     } else {
-      reconcilePlayerFromClient(p1, roomState.p1Raw, false, b);
-      reconcilePlayerFromClient(p2, roomState.p2Raw, true, b);
+      if (!p1.isCollisionWithBallHappened) reconcilePlayerFromClient(p1, roomState.p1Raw, false, b);
+      if (!p2.isCollisionWithBallHappened) reconcilePlayerFromClient(p2, roomState.p2Raw, true, b);
     }
     if (roomState.newRoundHold > 0) roomState.newRoundHold--;
 
     const prevPunch = b.punchEffectRadius;
     const isTouchingGround = physics.runEngineForNextFrame([p1Input, p2Input]);
-    const playerSavedBall =
-      (b.x < GROUND_HALF_WIDTH && p1.isCollisionWithBallHappened) ||
-      (b.x >= GROUND_HALF_WIDTH && p2.isCollisionWithBallHappened);
 
     let punchEvent = null;
     if (b.punchEffectRadius > 0 && prevPunch === 0) {
-      let px = b.punchEffectX;
-      let py = b.punchEffectY;
-      if (p1.isCollisionWithBallHappened) {
-        px = (b.x + p1.x) / 2;
-        py = (b.y + p1.y) / 2;
-      } else if (p2.isCollisionWithBallHappened) {
-        px = (b.x + p2.x) / 2;
-        py = (b.y + p2.y) / 2;
-      }
-      punchEvent = { x: px, y: py, isPower: b.isPowerHit };
+      punchEvent = { x: b.punchEffectX, y: b.punchEffectY, isPower: b.isPowerHit };
       b.punchEffectRadius = 0;
     }
 
-    // 球落地與角色接球若在同一幀，以接球為準，避免人站在球下卻直接給分
-    if (isTouchingGround && playerSavedBall) {
-      if (b.y >= 252) b.y = 236;
-      if (b.yVelocity >= 0) b.yVelocity = -Math.max(12, Math.abs(b.yVelocity));
-    } else if (isTouchingGround) {
+    if (isTouchingGround) {
       b.isPowerHit = false;
       punchEvent = { x: b.x, y: 252, isPower: false };
 

@@ -1,6 +1,6 @@
 // Author: Tony Hsieh
 // Date: 2026-08-27
-// Version: 2.3.8
+// Version: 2.3.9
 import './version.js';
 import { db, ref, onValue, set, update, remove, increment, onDisconnect } from './firebase.js';
 import { BadmintonEngine, setGlobalEngine } from './badmintonEngine.js';
