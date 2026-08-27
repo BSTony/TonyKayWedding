@@ -1,6 +1,6 @@
 // Author: Tony Hsieh
 // Date: 2026-08-27
-// Version: 1.4.5
+// Version: 1.4.6
 import http from 'http';
 import express from 'express';
 import { WebSocketServer, WebSocket } from 'ws';

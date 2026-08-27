@@ -1,6 +1,6 @@
 // Author: Tony Hsieh
 // Date: 2026-08-27
-// Version: 1.4.4
+// Version: 1.4.6
 /**
  * The Model part in the MVC pattern
  *
@@ -364,6 +364,8 @@ function physicsEngine(player1, player2, ball, userInputArray) {
         );
         player.isCollisionWithBallHappened = true;
       }
+      // 球心已進角色體內時強制推出，避免「貼太近就穿模」
+      separateBallFromPlayer(ball, player.x, player.y);
     } else {
       player.isCollisionWithBallHappened = false;
     }
@@ -385,12 +387,41 @@ function physicsEngine(player1, player2, ball, userInputArray) {
  * @return {boolean}
  */
 function isCollisionBetweenBallAndPlayerHappened(ball, playerX, playerY) {
-  const reach = PLAYER_HALF_LENGTH + 8;
+  const reach = PLAYER_HALF_LENGTH;
   const hits = (bx, by) =>
     Number.isFinite(bx) && Number.isFinite(by) &&
     Math.abs(bx - playerX) <= reach &&
     Math.abs(by - playerY) <= reach;
-  return hits(ball.x, ball.y) || hits(ball.previousX, ball.previousY);
+  if (hits(ball.x, ball.y)) return true;
+  const x0 = Number.isFinite(ball.previousX) ? ball.previousX : ball.x;
+  const y0 = Number.isFinite(ball.previousY) ? ball.previousY : ball.y;
+  if (hits(x0, y0)) return true;
+  for (let i = 1; i <= 4; i++) {
+    const u = i / 5;
+    if (hits(x0 + (ball.x - x0) * u, y0 + (ball.y - y0) * u)) return true;
+  }
+  return false;
+}
+
+function separateBallFromPlayer(ball, playerX, playerY) {
+  const reach = PLAYER_HALF_LENGTH + 2;
+  const dx = ball.x - playerX;
+  const dy = ball.y - playerY;
+  const overlapX = reach - Math.abs(dx);
+  const overlapY = reach - Math.abs(dy);
+  if (overlapX <= 0 || overlapY <= 0) return;
+  if (overlapX < overlapY) {
+    const dir = dx !== 0 ? Math.sign(dx) : (playerX < GROUND_HALF_WIDTH ? -1 : 1);
+    ball.x = playerX + dir * reach;
+  } else {
+    const dir = dy !== 0 ? Math.sign(dy) : (ball.yVelocity < 0 ? -1 : 1);
+    ball.y = playerY + dir * reach;
+    if (ball.y > BALL_TOUCHING_GROUND_Y_COORD - 2) {
+      ball.y = BALL_TOUCHING_GROUND_Y_COORD - 2;
+      if (ball.yVelocity > 0) ball.yVelocity = -Math.max(8, Math.abs(ball.yVelocity));
+    }
+    if (ball.y < 0) ball.y = 0;
+  }
 }
 
 /**

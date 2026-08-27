@@ -1,6 +1,6 @@
 // Author: Tony Hsieh
 // Date: 2026-08-27
-// Version: 2.3.7
+// Version: 2.3.8
 import { PikaPhysics, PikaUserInput, processPlayerMovementAndSetPlayerPosition } from './physics.js';
 
 /**
@@ -519,7 +519,7 @@ export class BadmintonEngine {
 
       const currentInputKey = `${this.keys.left ? 1 : 0},${this.keys.right ? 1 : 0},${this.keys.up ? 1 : 0},${this.keys.down ? 1 : 0},${hit}`;
       const wsOpen = this.ws && this.ws.readyState === WebSocket.OPEN;
-      const inputInterval = wsOpen ? 33 : 90;
+      const inputInterval = wsOpen ? 16 : 50;
       if (currentInputKey !== this.lastSentInputKey || hit || (now - this.lastInputSendTime > inputInterval)) {
         this.lastInputSendTime = now;
         this.lastSentInputKey = currentInputKey;
@@ -779,7 +779,7 @@ export class BadmintonEngine {
     // 解決 Mac 120Hz ProMotion 螢幕 / Safari 與 Windows 60Hz 的幀率差異，確保在任何刷新率下均維持最極致絲滑度！
     const dtRatio = Math.max(0.1, Math.min(3.0, elapsed / 16.666));
     const usingWs = this.lastWsStateTime && (performance.now() - this.lastWsStateTime) < 2500;
-    const smoothTarget = usingWs ? 0.55 : 0.35;
+    const smoothTarget = usingWs ? 0.7 : 0.4;
     const smoothFactor = 1 - Math.pow(1 - smoothTarget, dtRatio);
 
     const isP1 = (this.cloudRole === 'p1');
@@ -787,22 +787,36 @@ export class BadmintonEngine {
 
     // 本人角色立刻跟上預測座標，避免被平滑算法拖成「鈍鈍的」
     if (isP1) {
-      this.smoothP1.x = targetP1X;
+      let x = targetP1X;
+      if (this.roundState === 'playing') {
+        if (this.keys.right) x += 4;
+        if (this.keys.left) x -= 4;
+        if (x < 32) x = 32;
+        if (x > 184) x = 184;
+      }
+      this.smoothP1.x = x;
       this.smoothP1.y = targetP1Y;
     } else {
-      if (Math.abs(this.smoothP1.x - targetP1X) > 12) this.smoothP1.x = targetP1X;
+      if (Math.abs(this.smoothP1.x - targetP1X) > 8) this.smoothP1.x = targetP1X;
       else this.smoothP1.x += (targetP1X - this.smoothP1.x) * smoothFactor;
-      if (Math.abs(this.smoothP1.y - targetP1Y) > 12) this.smoothP1.y = targetP1Y;
+      if (Math.abs(this.smoothP1.y - targetP1Y) > 8) this.smoothP1.y = targetP1Y;
       else this.smoothP1.y += (targetP1Y - this.smoothP1.y) * smoothFactor;
     }
 
     if (isP2) {
-      this.smoothP2.x = targetP2X;
+      let x = targetP2X;
+      if (this.roundState === 'playing') {
+        if (this.keys.right) x += 4;
+        if (this.keys.left) x -= 4;
+        if (x < 248) x = 248;
+        if (x > 400) x = 400;
+      }
+      this.smoothP2.x = x;
       this.smoothP2.y = targetP2Y;
     } else {
-      if (Math.abs(this.smoothP2.x - targetP2X) > 12) this.smoothP2.x = targetP2X;
+      if (Math.abs(this.smoothP2.x - targetP2X) > 8) this.smoothP2.x = targetP2X;
       else this.smoothP2.x += (targetP2X - this.smoothP2.x) * smoothFactor;
-      if (Math.abs(this.smoothP2.y - targetP2Y) > 12) this.smoothP2.y = targetP2Y;
+      if (Math.abs(this.smoothP2.y - targetP2Y) > 8) this.smoothP2.y = targetP2Y;
       else this.smoothP2.y += (targetP2Y - this.smoothP2.y) * smoothFactor;
     }
 
@@ -813,8 +827,8 @@ export class BadmintonEngine {
       this.smoothBall.x = targetBallX;
       this.smoothBall.y = targetBallY;
     } else {
-      const leadX = targetBallX + b.xVelocity * 0.45;
-      const leadY = Math.min(252, targetBallY + b.yVelocity * 0.45);
+      const leadX = targetBallX + b.xVelocity * 0.85;
+      const leadY = Math.min(252, Math.max(0, targetBallY + b.yVelocity * 0.85));
       this.smoothBall.x = leadX;
       this.smoothBall.y = leadY;
     }
