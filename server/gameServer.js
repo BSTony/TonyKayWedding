@@ -1,6 +1,6 @@
 // Author: Tony Hsieh
 // Date: 2026-08-27
-// Version: 1.4.2
+// Version: 1.4.3
 import http from 'http';
 import express from 'express';
 import { WebSocketServer, WebSocket } from 'ws';
@@ -228,7 +228,8 @@ function startServerRoomSimulation(roomId, roomData) {
     maxScore: roomData.maxScore || 5,
     roundState: 'playing',
     loopTimer: null,
-    lastWriteTime: 0
+    lastWriteTime: 0,
+    ignoreClientPos: 0,
   };
 
   // 標記此房間由雲端伺服器權威託管 (兩端玩家均不需當主機)
@@ -267,12 +268,18 @@ function startServerRoomSimulation(roomId, roomData) {
     fillUserInput(p2Input, roomState.p2Raw, true, roomState.p2HitHold);
     if (roomState.p1HitHold > 0) roomState.p1HitHold--;
     if (roomState.p2HitHold > 0) roomState.p2HitHold--;
-    reconcilePlayerFromClient(p1, roomState.p1Raw, false);
-    reconcilePlayerFromClient(p2, roomState.p2Raw, true);
+    if (roomState.ignoreClientPos > 0) {
+      roomState.ignoreClientPos--;
+    } else {
+      reconcilePlayerFromClient(p1, roomState.p1Raw, false);
+      reconcilePlayerFromClient(p2, roomState.p2Raw, true);
+    }
 
     const prevPunch = b.punchEffectRadius;
     const isTouchingGround = physics.runEngineForNextFrame([p1Input, p2Input]);
-    const playerSavedBall = !!(p1.isCollisionWithBallHappened || p2.isCollisionWithBallHappened);
+    const playerSavedBall =
+      (b.x < GROUND_HALF_WIDTH && p1.isCollisionWithBallHappened) ||
+      (b.x >= GROUND_HALF_WIDTH && p2.isCollisionWithBallHappened);
 
     let punchEvent = null;
     if (b.punchEffectRadius > 0 && prevPunch === 0) {
@@ -332,6 +339,11 @@ function startServerRoomSimulation(roomId, roomData) {
           physics.player1.initializeForNewRound();
           physics.player2.initializeForNewRound();
           physics.ball.initializeForNewRound(p2Serve);
+          roomState.p1Raw = { left: false, right: false, up: false, down: false, powerHit: 0 };
+          roomState.p2Raw = { left: false, right: false, up: false, down: false, powerHit: 0 };
+          roomState.p1HitHold = 0;
+          roomState.p2HitHold = 0;
+          roomState.ignoreClientPos = 12;
           roomState.roundState = 'playing';
 
           const newRoundState = {

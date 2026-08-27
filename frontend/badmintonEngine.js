@@ -1,6 +1,6 @@
 // Author: Tony Hsieh
 // Date: 2026-08-27
-// Version: 2.3.4
+// Version: 2.3.5
 import { PikaPhysics, PikaUserInput, processPlayerMovementAndSetPlayerPosition } from './physics.js';
 
 /**
@@ -374,6 +374,8 @@ export class BadmintonEngine {
     }
 
     if (alignLocal) {
+      this.lastSentInputKey = '';
+      this.lastInputSendTime = 0;
       this.smoothP1 = { x: p1.x, y: p1.y };
       this.smoothP2 = { x: p2.x, y: p2.y };
       this.smoothBall = { x: b.x, y: b.y };
@@ -434,10 +436,18 @@ export class BadmintonEngine {
     if (!snaps || !snaps.length) return null;
     const last = snaps[snaps.length - 1];
     const dt = Math.min((performance.now() - last.t) / 33.333, 2);
+    let x = last.x + last.vx * dt;
     let y = last.y + last.vy * dt + 0.5 * 0.8 * dt * dt;
     if (y > 252) y = 252;
     if (y < 0) y = 0;
-    return { x: last.x + last.vx * dt, y };
+    const netX = 216;
+    const crossed = (last.x < netX && x >= netX) || (last.x > netX && x <= netX);
+    if (crossed && y > 176) {
+      if (y > 192) {
+        x = last.x < netX ? netX - 26 : netX + 26;
+      }
+    }
+    return { x, y };
   }
 
   approachCoord(current, target, maxStep) {
@@ -539,12 +549,14 @@ export class BadmintonEngine {
           right: !!this.keys.right,
           up: !!this.keys.up,
           down: !!this.keys.down,
-          powerHit: hit,
-          x: Math.round(myPlayer.x * 10) / 10,
-          y: Math.round(myPlayer.y * 10) / 10,
-          s: myPlayer.state,
-          d: myPlayer.divingDirection
+          powerHit: hit
         };
+        if (this.roundState === 'playing') {
+          inputPayload.x = Math.round(myPlayer.x * 10) / 10;
+          inputPayload.y = Math.round(myPlayer.y * 10) / 10;
+          inputPayload.s = myPlayer.state;
+          inputPayload.d = myPlayer.divingDirection;
+        }
 
         if (wsOpen) {
           this.ws.send(JSON.stringify({

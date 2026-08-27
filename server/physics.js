@@ -1,6 +1,6 @@
 // Author: Tony Hsieh
 // Date: 2026-08-27
-// Version: 1.4.1
+// Version: 1.4.3
 /**
  * The Model part in the MVC pattern
  *
@@ -216,6 +216,7 @@ class Player {
      * @type {number} 0, 1, 2, 3 or 4
      */
     this.computerBoldness = rand() % 5; // 0xD8  // initialized to (_rand() % 5)
+    this._netSync = false;
   }
 }
 
@@ -395,6 +396,39 @@ function isCollisionBetweenBallAndPlayerHappened(ball, playerX, playerY) {
 }
 
 /**
+ * 球與網：含高速穿越時的連續碰撞，避免一幀跳過網柱區間
+ */
+function applyNetCollision(ball, futureBallX) {
+  const netX = GROUND_HALF_WIDTH;
+  const half = NET_PILLAR_HALF_WIDTH;
+  const futureBallY = ball.y + ball.yVelocity;
+  const hitsNetHeight = (y) => y > NET_PILLAR_TOP_TOP_Y_COORD;
+  const hitsMesh = (y) => y > NET_PILLAR_TOP_BOTTOM_Y_COORD;
+  const inColumn = (x) => Math.abs(x - netX) < half;
+  const crossed =
+    (ball.x < netX && futureBallX >= netX) ||
+    (ball.x > netX && futureBallX <= netX) ||
+    inColumn(ball.x) ||
+    inColumn(futureBallX);
+
+  if (!crossed) return;
+  if (!hitsNetHeight(ball.y) && !hitsNetHeight(futureBallY)) return;
+
+  if (!hitsMesh(ball.y) && !hitsMesh(futureBallY)) {
+    if (ball.yVelocity > 0) ball.yVelocity = -ball.yVelocity;
+    return;
+  }
+
+  if (ball.x <= netX) {
+    ball.xVelocity = -Math.abs(ball.xVelocity);
+    if (ball.x > netX - half) ball.x = netX - half - 1;
+  } else {
+    ball.xVelocity = Math.abs(ball.xVelocity);
+    if (ball.x < netX + half) ball.x = netX + half + 1;
+  }
+}
+
+/**
  * FUN_00402dc0
  * Process collision between ball and world and set ball position
  * @param {Ball} ball
@@ -449,22 +483,7 @@ function processCollisionBetweenBallAndWorldAndSetBallPosition(ball) {
   }
 
   // If ball touches net
-  if (
-    Math.abs(ball.x - GROUND_HALF_WIDTH) < NET_PILLAR_HALF_WIDTH &&
-    ball.y > NET_PILLAR_TOP_TOP_Y_COORD
-  ) {
-    if (ball.y <= NET_PILLAR_TOP_BOTTOM_Y_COORD) {
-      if (ball.yVelocity > 0) {
-        ball.yVelocity = -ball.yVelocity;
-      }
-    } else {
-      if (ball.x < GROUND_HALF_WIDTH) {
-        ball.xVelocity = -Math.abs(ball.xVelocity);
-      } else {
-        ball.xVelocity = Math.abs(ball.xVelocity);
-      }
-    }
-  }
+  applyNetCollision(ball, futureBallX);
 
   futureBallY = ball.y + ball.yVelocity;
   // if ball would touch ground
