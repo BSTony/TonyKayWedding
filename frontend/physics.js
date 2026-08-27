@@ -1,6 +1,6 @@
 // Author: Tony Hsieh
 // Date: 2026-08-27
-// Version: 1.4.3
+// Version: 1.4.4
 /**
  * The Model part in the MVC pattern
  *
@@ -414,16 +414,14 @@ function applyNetCollision(ball, futureBallX) {
   if (!hitsNetHeight(ball.y) && !hitsNetHeight(futureBallY)) return;
 
   if (!hitsMesh(ball.y) && !hitsMesh(futureBallY)) {
-    if (ball.yVelocity > 0) ball.yVelocity = -ball.yVelocity;
+    if (inColumn(ball.x) && ball.yVelocity > 0) ball.yVelocity = -ball.yVelocity;
     return;
   }
 
   if (ball.x <= netX) {
     ball.xVelocity = -Math.abs(ball.xVelocity);
-    if (ball.x > netX - half) ball.x = netX - half - 1;
   } else {
     ball.xVelocity = Math.abs(ball.xVelocity);
-    if (ball.x < netX + half) ball.x = netX + half + 1;
   }
 }
 

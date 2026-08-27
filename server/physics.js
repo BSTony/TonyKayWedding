@@ -1,6 +1,6 @@
 // Author: Tony Hsieh
 // Date: 2026-08-27
-// Version: 1.4.3
+// Version: 1.4.4
 /**
  * The Model part in the MVC pattern
  *
@@ -385,14 +385,12 @@ function physicsEngine(player1, player2, ball, userInputArray) {
  * @return {boolean}
  */
 function isCollisionBetweenBallAndPlayerHappened(ball, playerX, playerY) {
-  let diff = ball.x - playerX;
-  if (Math.abs(diff) <= PLAYER_HALF_LENGTH) {
-    diff = ball.y - playerY;
-    if (Math.abs(diff) <= PLAYER_HALF_LENGTH) {
-      return true;
-    }
-  }
-  return false;
+  const reach = PLAYER_HALF_LENGTH + 8;
+  const hits = (bx, by) =>
+    Number.isFinite(bx) && Number.isFinite(by) &&
+    Math.abs(bx - playerX) <= reach &&
+    Math.abs(by - playerY) <= reach;
+  return hits(ball.x, ball.y) || hits(ball.previousX, ball.previousY);
 }
 
 /**
@@ -414,17 +412,16 @@ function applyNetCollision(ball, futureBallX) {
   if (!crossed) return;
   if (!hitsNetHeight(ball.y) && !hitsNetHeight(futureBallY)) return;
 
+  // 網頂白帶：只有球心已在網柱範圍才上彈，避免過網被當成撞網
   if (!hitsMesh(ball.y) && !hitsMesh(futureBallY)) {
-    if (ball.yVelocity > 0) ball.yVelocity = -ball.yVelocity;
+    if (inColumn(ball.x) && ball.yVelocity > 0) ball.yVelocity = -ball.yVelocity;
     return;
   }
 
   if (ball.x <= netX) {
     ball.xVelocity = -Math.abs(ball.xVelocity);
-    if (ball.x > netX - half) ball.x = netX - half - 1;
   } else {
     ball.xVelocity = Math.abs(ball.xVelocity);
-    if (ball.x < netX + half) ball.x = netX + half + 1;
   }
 }
 

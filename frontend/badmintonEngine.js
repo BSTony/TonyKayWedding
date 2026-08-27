@@ -1,6 +1,6 @@
 // Author: Tony Hsieh
 // Date: 2026-08-27
-// Version: 2.3.5
+// Version: 2.3.6
 import { PikaPhysics, PikaUserInput, processPlayerMovementAndSetPlayerPosition } from './physics.js';
 
 /**
@@ -431,31 +431,6 @@ export class BadmintonEngine {
     if (this._ballSnaps.length > 12) this._ballSnaps.shift();
   }
 
-  sampleBallLive() {
-    const snaps = this._ballSnaps;
-    if (!snaps || !snaps.length) return null;
-    const last = snaps[snaps.length - 1];
-    const dt = Math.min((performance.now() - last.t) / 33.333, 2);
-    let x = last.x + last.vx * dt;
-    let y = last.y + last.vy * dt + 0.5 * 0.8 * dt * dt;
-    if (y > 252) y = 252;
-    if (y < 0) y = 0;
-    const netX = 216;
-    const crossed = (last.x < netX && x >= netX) || (last.x > netX && x <= netX);
-    if (crossed && y > 176) {
-      if (y > 192) {
-        x = last.x < netX ? netX - 26 : netX + 26;
-      }
-    }
-    return { x, y };
-  }
-
-  approachCoord(current, target, maxStep) {
-    const delta = target - current;
-    if (Math.abs(delta) <= maxStep) return target;
-    return current + Math.sign(delta) * maxStep;
-  }
-
   stop() {
     this.isRunning = false;
     this.roundState = 'idle';
@@ -825,17 +800,16 @@ export class BadmintonEngine {
       else this.smoothP2.y += (targetP2Y - this.smoothP2.y) * smoothFactor;
     }
 
-    // 羽毛球：跟最新伺服器位置外推，並限制每幀位移，避免瞬移也不讓畫面落後判定
-    const liveBall = this.sampleBallLive();
-    const ballX = liveBall ? liveBall.x : targetBallX;
-    const ballY = liveBall ? liveBall.y : targetBallY;
-    if (this.roundState === 'scoring' || this.roundState === 'game_over') {
-      this.smoothBall.x = ballX;
-      this.smoothBall.y = ballY;
+    // 羽毛球直接跟伺服器座標，不外推，避免畫面接觸點和判定點錯開
+    if (this.roundState === 'scoring' || this.roundState === 'game_over' ||
+        Math.abs(this.smoothBall.x - targetBallX) > 40 ||
+        Math.abs(this.smoothBall.y - targetBallY) > 40) {
+      this.smoothBall.x = targetBallX;
+      this.smoothBall.y = targetBallY;
     } else {
-      const maxStep = 18 * dtRatio;
-      this.smoothBall.x = this.approachCoord(this.smoothBall.x, ballX, maxStep);
-      this.smoothBall.y = this.approachCoord(this.smoothBall.y, ballY, maxStep);
+      const ballFollow = 1 - Math.pow(1 - 0.55, dtRatio);
+      this.smoothBall.x += (targetBallX - this.smoothBall.x) * ballFollow;
+      this.smoothBall.y += (targetBallY - this.smoothBall.y) * ballFollow;
     }
   }
 

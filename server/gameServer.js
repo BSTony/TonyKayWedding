@@ -1,6 +1,6 @@
 // Author: Tony Hsieh
 // Date: 2026-08-27
-// Version: 1.4.3
+// Version: 1.4.4
 import http from 'http';
 import express from 'express';
 import { WebSocketServer, WebSocket } from 'ws';
@@ -283,7 +283,16 @@ function startServerRoomSimulation(roomId, roomData) {
 
     let punchEvent = null;
     if (b.punchEffectRadius > 0 && prevPunch === 0) {
-      punchEvent = { x: b.punchEffectX, y: b.punchEffectY, isPower: b.isPowerHit };
+      let px = b.punchEffectX;
+      let py = b.punchEffectY;
+      if (p1.isCollisionWithBallHappened) {
+        px = (b.x + p1.x) / 2;
+        py = (b.y + p1.y) / 2;
+      } else if (p2.isCollisionWithBallHappened) {
+        px = (b.x + p2.x) / 2;
+        py = (b.y + p2.y) / 2;
+      }
+      punchEvent = { x: px, y: py, isPower: b.isPowerHit };
       b.punchEffectRadius = 0;
     }
 
@@ -343,7 +352,7 @@ function startServerRoomSimulation(roomId, roomData) {
           roomState.p2Raw = { left: false, right: false, up: false, down: false, powerHit: 0 };
           roomState.p1HitHold = 0;
           roomState.p2HitHold = 0;
-          roomState.ignoreClientPos = 12;
+          roomState.ignoreClientPos = 2;
           roomState.roundState = 'playing';
 
           const newRoundState = {
