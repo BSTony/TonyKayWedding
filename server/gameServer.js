@@ -1,6 +1,6 @@
 // Author: Tony Hsieh
 // Date: 2026-08-27
-// Version: 1.4.7
+// Version: 1.4.8
 import http from 'http';
 import express from 'express';
 import { WebSocketServer, WebSocket } from 'ws';
@@ -201,7 +201,13 @@ onValue(ref(db, 'rankedRooms'), (snapshot) => {
         }
       }
     } else {
-      if (activeFirebaseRooms[roomId]) {
+      if (activeFirebaseRooms[roomId] && room.status === 'finished') {
+        const live = activeFirebaseRooms[roomId];
+        if (!live._ending) {
+          live._ending = true;
+          setTimeout(() => stopServerRoomSimulation(roomId), 1500);
+        }
+      } else if (activeFirebaseRooms[roomId]) {
         stopServerRoomSimulation(roomId);
       }
     }
@@ -262,8 +268,12 @@ function startServerRoomSimulation(roomId, roomData) {
   // 30 FPS 物理循環 (33.33ms)
   roomState.loopTimer = setInterval(() => {
     if (roomState.roundState !== 'playing') {
-      if (roomState.roundState === 'scoring') {
-        broadcastWs(roomId, packRoomState(roomState));
+      if (roomState.roundState === 'scoring' || roomState.roundState === 'game_over') {
+        broadcastWs(roomId, packRoomState(roomState, roomState.roundState === 'game_over' ? {
+          t: 'game_over',
+          type: 'game_over',
+          winner: roomState.s1 >= roomState.s2 ? 'p1' : 'p2'
+        } : {}));
       }
       return;
     }
@@ -306,6 +316,9 @@ function startServerRoomSimulation(roomId, roomData) {
 
       if (roomState.s1 >= roomState.maxScore || roomState.s2 >= roomState.maxScore) {
         roomState.roundState = 'game_over';
+        const winner = roomState.s1 >= roomState.maxScore ? 'p1' : 'p2';
+        const overExtra = { t: 'game_over', type: 'game_over', winner };
+        broadcastWs(roomId, packRoomState(roomState, overExtra));
         const finalState = {
           p1: { x: p1.x, y: p1.y, state: p1.state, frameNumber: p1.frameNumber, divingDirection: p1.divingDirection },
           p2: { x: p2.x, y: p2.y, state: p2.state, frameNumber: p2.frameNumber, divingDirection: p2.divingDirection },
@@ -314,12 +327,13 @@ function startServerRoomSimulation(roomId, roomData) {
           s2: roomState.s2,
           round: 'game_over',
           punch: punchEvent,
+          winner,
           ts: Date.now()
         };
         set(ref(db, `rankedRooms/${roomId}/state`), finalState).catch(() => {});
-        // 標記房間結束
         update(ref(db, `rankedRooms/${roomId}`), { status: 'finished' }).catch(() => {});
-        stopServerRoomSimulation(roomId);
+        roomState._ending = true;
+        setTimeout(() => stopServerRoomSimulation(roomId), 1500);
         return;
       } else {
         roomState.roundState = 'scoring';

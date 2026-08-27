@@ -1,6 +1,6 @@
 // Author: Tony Hsieh
 // Date: 2026-08-27
-// Version: 2.3.9
+// Version: 2.3.10
 import './version.js';
 import { db, ref, onValue, set, update, remove, increment, onDisconnect } from './firebase.js';
 import { BadmintonEngine, setGlobalEngine } from './badmintonEngine.js';
@@ -574,6 +574,24 @@ function pairWithAIContender() {
 }
 
 let matchEnded = false;
+let cancelAbandoned = null;
+
+function finishRankedMatch(playerWon) {
+  if (matchEnded) return;
+  matchEnded = true;
+  if (typeof cancelAbandoned === 'function') {
+    try { cancelAbandoned(); } catch (e) {}
+    cancelAbandoned = null;
+  }
+  clearMatchUnsubs();
+  if (currentRoomId) {
+    update(ref(db, 'rankedRooms/' + currentRoomId), { status: 'finished' }).catch(() => {});
+    setTimeout(() => {
+      remove(ref(db, 'rankedRooms/' + currentRoomId)).catch(() => {});
+    }, 15000);
+  }
+  handleRankedGameOver(playerWon);
+}
 
 window.addEventListener('beforeunload', () => {
   if (queueRef) remove(queueRef).catch(() => {});
@@ -588,12 +606,21 @@ function bindRealtimeMatch(roomId) {
   const roomBase = 'rankedRooms/' + roomId;
   const myRole = isHostPlayer ? 'p1' : 'p2';
   const inputPath = myRole === 'p1' ? '/p1Input' : '/p2Input';
+  let lastFbInputAt = 0;
 
   const sendInput = (input) => {
+    const now = performance.now();
+    const wsLive = gameEngine && gameEngine.ws && gameEngine.ws.readyState === WebSocket.OPEN &&
+      gameEngine.lastWsStateTime && (now - gameEngine.lastWsStateTime < 500);
+    if (wsLive && now - lastFbInputAt < 80 && !(input && input.powerHit)) return;
+    lastFbInputAt = now;
     set(ref(db, roomBase + inputPath), input).catch(() => {});
   };
 
-  onDisconnect(ref(db, roomBase + '/abandoned')).set({ by: uid, name: nickname }).catch(() => {});
+  const abandonedRef = ref(db, roomBase + '/abandoned');
+  const disc = onDisconnect(abandonedRef);
+  disc.set({ by: uid, name: nickname }).catch(() => {});
+  cancelAbandoned = () => disc.cancel().catch(() => {});
 
   const unsubAbandoned = onValue(ref(db, roomBase + '/abandoned'), (snap) => {
     const ab = snap.val();
@@ -625,10 +652,27 @@ function bindRealtimeMatch(roomId) {
   const unsubState = onValue(ref(db, roomBase + '/state'), (snap) => {
     const state = snap.val();
     if (!state || !gameEngine) return;
-    if (gameEngine.multiplayerRole === 'host') return;
     gameEngine.receiveRemoteState(state, 'rtdb');
+    if (!matchEnded && (state.round === 'game_over' || state.s1 >= 5 || state.s2 >= 5)) {
+      const myScore = isHostPlayer ? (state.s1 || 0) : (state.s2 || 0);
+      const oppScore = isHostPlayer ? (state.s2 || 0) : (state.s1 || 0);
+      finishRankedMatch(myScore > oppScore);
+    }
   });
   matchUnsubs.push(unsubState);
+
+  const unsubStatus = onValue(ref(db, roomBase + '/status'), (snap) => {
+    if (snap.val() !== 'finished' || matchEnded || !gameEngine) return;
+    setTimeout(() => {
+      if (matchEnded || !gameEngine) return;
+      const s1 = gameEngine.playerScore || 0;
+      const s2 = gameEngine.compScore || 0;
+      const myScore = isHostPlayer ? s1 : s2;
+      const oppScore = isHostPlayer ? s2 : s1;
+      finishRankedMatch(myScore > oppScore);
+    }, 400);
+  });
+  matchUnsubs.push(unsubStatus);
 
   const connectWs = (wsUrl) => {
     if (!wsUrl || !gameEngine) return;
@@ -641,8 +685,9 @@ function bindRealtimeMatch(roomId) {
   if (isHostPlayer) {
     const fallbackTimer = setTimeout(() => {
       if (matchEnded || !gameEngine) return;
+      const wsOpen = gameEngine.ws && gameEngine.ws.readyState === WebSocket.OPEN;
       const wsLive = gameEngine.lastWsStateTime && (performance.now() - gameEngine.lastWsStateTime < 2000);
-      if (wsLive || gameEngine.roundState === 'playing' || gameEngine.roundState === 'scoring') return;
+      if (wsOpen || wsLive || gameEngine.roundState === 'playing' || gameEngine.roundState === 'scoring') return;
       gameEngine.adoptHostAuthority((state) => {
         if (!gameEngine || gameEngine.multiplayerRole !== 'host') return;
         set(ref(db, roomBase + '/state'), state).catch(() => {});
@@ -700,15 +745,7 @@ function enterArenaMatch() {
   };
 
   gameEngine.onGameOver = (playerWon) => {
-    matchEnded = true;
-    clearMatchUnsubs();
-    if (currentRoomId) {
-      update(ref(db, 'rankedRooms/' + currentRoomId), { status: 'finished' }).catch(() => {});
-      setTimeout(() => {
-        remove(ref(db, 'rankedRooms/' + currentRoomId)).catch(() => {});
-      }, 15000);
-    }
-    handleRankedGameOver(playerWon);
+    finishRankedMatch(playerWon);
   };
 
   // 判定真人連線對打 vs 單人 AI

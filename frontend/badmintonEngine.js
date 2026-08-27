@@ -1,6 +1,6 @@
 // Author: Tony Hsieh
 // Date: 2026-08-27
-// Version: 2.3.9
+// Version: 2.3.10
 import { PikaPhysics, PikaUserInput, processPlayerMovementAndSetPlayerPosition } from './physics.js';
 
 /**
@@ -19,14 +19,18 @@ import { PikaPhysics, PikaUserInput, processPlayerMovementAndSetPlayerPosition }
 export class BadmintonEngine {
   constructor(canvasId) {
     this.canvas = document.getElementById(canvasId);
-    this.ctx = this.canvas.getContext('2d');
+    this.ctx = this.canvas.getContext('2d', { alpha: false });
 
-    // 邏輯解析度 (原版物理) 與 2x 高畫質渲染解析度
-    this.scale = 2;
+    // 手機 / LINE WebView 用 1x，避免 864x608 每幀重繪掉到十來格
+    const ua = navigator.userAgent || '';
+    this.lowFx = window.innerWidth < 900 || /Android|iPhone|iPod|Mobile|Line/i.test(ua);
+    this.scale = this.lowFx ? 1 : 2;
     this.logicalWidth = 432;
     this.logicalHeight = 304;
     this.canvas.width = this.logicalWidth * this.scale;
     this.canvas.height = this.logicalHeight * this.scale;
+    this.ctx.imageSmoothingEnabled = false;
+    this._staticLayer = null;
 
     this.isRunning = false;
     this.roundState = 'idle'; // 'idle' | 'playing' | 'scoring' | 'game_over'
@@ -49,6 +53,7 @@ export class BadmintonEngine {
 
     // 載入 Sprite Sheet
     this.spriteImg = new Image();
+    this.spriteImg.onload = () => { this._staticLayer = null; };
     this.spriteImg.src = './sprite_sheet.png';
     this.spriteData = null;
     this.spriteLoaded = false;
@@ -57,6 +62,7 @@ export class BadmintonEngine {
       .then(data => {
         this.spriteData = data.frames;
         this.spriteLoaded = true;
+        this._staticLayer = null;
       });
 
     // 載入婚禮背景圖 (KAY & TONY WEDDING)
@@ -65,10 +71,11 @@ export class BadmintonEngine {
     this.bgLoaded = false;
     this.bgImg.onload = () => {
       this.bgLoaded = true;
+      this._staticLayer = null;
     };
 
-    // 浪漫玫瑰花瓣系統 (粉紅/象牙白玫瑰)
-    this.petals = Array.from({ length: 24 }, () => ({
+    // 浪漫玫瑰花瓣系統 (粉紅/象牙白玫瑰)；連線對戰少畫以保幀率
+    this.petals = Array.from({ length: this.lowFx ? 6 : 14 }, () => ({
       x: Math.random() * 432,
       y: Math.random() * 250,
       size: 2.5 + Math.random() * 3.5,
@@ -104,6 +111,7 @@ export class BadmintonEngine {
     this._wsRole = '';
     this._wsClosedOnPurpose = false;
     this._wsRetry = 0;
+    this._gameOverFired = false;
   }
 
   start(maxScore = 5, compBoldness = 2, onSendState = null) {
@@ -120,6 +128,7 @@ export class BadmintonEngine {
     this.sparkles = [];
     this.pikaPhysics = new PikaPhysics(false, true);
     this.pikaPhysics.player2.computerBoldness = compBoldness;
+    this._gameOverFired = false;
     this.lastFrameTime = performance.now();
     requestAnimationFrame(this.loop);
   }
@@ -143,6 +152,7 @@ export class BadmintonEngine {
     this.lastStateSendTime = 0;
     this.lastSentInputKey = '';
     this.pikaPhysics = new PikaPhysics(false, false);
+    this._gameOverFired = false;
     this.lastFrameTime = performance.now();
     requestAnimationFrame(this.loop);
   }
@@ -171,6 +181,7 @@ export class BadmintonEngine {
     this.lastSentInputKey = '';
     this.powerHitBuffer = 0;
     this.pikaPhysics = new PikaPhysics(false, false);
+    this._gameOverFired = false;
     this.lastFrameTime = performance.now();
     requestAnimationFrame(this.loop);
   }
@@ -193,6 +204,7 @@ export class BadmintonEngine {
     this.remoteHostState = null;
     this.lastInputSendTime = 0;
     this.lastSentInputKey = '';
+    this._gameOverFired = false;
     this.attachWebSocket(wsUrl, roomId, role);
     this.lastFrameTime = performance.now();
     requestAnimationFrame(this.loop);
@@ -258,13 +270,9 @@ export class BadmintonEngine {
         try {
           const data = JSON.parse(evt.data);
           const t = data.t || data.type;
-          if (t === 's') {
+          if (t === 's' || t === 'game_over') {
             this.lastWsStateTime = performance.now();
             this.receiveRemoteState(data, 'ws');
-          } else if (t === 'game_over') {
-            this.roundState = 'game_over';
-            const won = (this.cloudRole === 'p1' && data.winner === 'p1') || (this.cloudRole === 'p2' && data.winner === 'p2');
-            if (this.onGameOver) this.onGameOver(won);
           }
         } catch (e) {}
       };
@@ -299,17 +307,27 @@ export class BadmintonEngine {
   receiveRemoteState(state, source = 'rtdb') {
     if (!state) return;
     if ((this.multiplayerRole === 'host' || this.multiplayerRole === 'single') && source !== 'ws') {
+      const hostOver = state.round === 'game_over' ||
+        Number(state.s1) >= this.maxScore ||
+        Number(state.s2) >= this.maxScore;
+      if (hostOver) this.fireGameOver(state);
       return;
     }
     if (this.multiplayerRole === 'host' && source === 'ws') {
       this.yieldToCloudAuthority(this._wsRole || this.cloudRole || 'p1', this.onSendInput);
     }
 
-    // WebSocket 若短暫沒畫面，立刻改吃 Firebase，避免連上卻收不到輸入時對方角色凍結
-    if (source !== 'ws' && this.lastWsStateTime && (performance.now() - this.lastWsStateTime) < 250) {
+    const incomingOver = state.round === 'game_over' ||
+      Number(state.s1) >= this.maxScore ||
+      Number(state.s2) >= this.maxScore;
+
+    // 結束封包不可被「WS 還活著」視窗擋下，否則一邊永遠等不到結算
+    if (source !== 'ws' && !incomingOver && this.lastWsStateTime && (performance.now() - this.lastWsStateTime) < 250) {
       return;
     }
-    if (state.newRound) {
+    if (incomingOver) {
+      if (state.ts) this.lastStateT = Math.max(this.lastStateT || 0, state.ts || 0);
+    } else if (state.newRound) {
       this.lastStateT = state.ts || this.lastStateT;
     } else {
       if (state.ts && this.lastStateT && state.ts + 40 < this.lastStateT) {
@@ -402,23 +420,37 @@ export class BadmintonEngine {
     }
 
     // 同步局狀態
-    if (state.round && state.round !== this.roundState) {
+    if (incomingOver) {
+      this.fireGameOver(state);
+    } else if (state.round && state.round !== this.roundState) {
       this.roundState = state.round;
-    }
-
-    // 只要達成結算條件或收到結束信號，立即觸發結束事件
-    if ((state.round === 'game_over' || this.playerScore >= this.maxScore || this.compScore >= this.maxScore) && this.roundState !== 'game_over') {
-      this.roundState = 'game_over';
-      if (this.onGameOver) {
-        const myScore = this.cloudRole === 'p2' ? state.s2 : state.s1;
-        const oppScore = this.cloudRole === 'p2' ? state.s1 : state.s2;
-        if (this.onGameOver) this.onGameOver(myScore > oppScore);
-      }
     }
 
     if (state.punch) {
       this.addPunchEffect(state.punch.x, state.punch.y, state.punch.isPower);
     }
+  }
+
+  fireGameOver(state = {}) {
+    if (this._gameOverFired) return;
+    this._gameOverFired = true;
+    this.roundState = 'game_over';
+    const s1 = Number.isFinite(Number(state.s1)) ? Number(state.s1) : this.playerScore;
+    const s2 = Number.isFinite(Number(state.s2)) ? Number(state.s2) : this.compScore;
+    this.playerScore = s1;
+    this.compScore = s2;
+    if (this.onScoreUpdate) this.onScoreUpdate(s1, s2);
+    if (this.cloudRole === 'spectate' || !this.onGameOver) return;
+    if (state.winner === 'p1' || state.winner === 'p2') {
+      this.onGameOver(
+        (this.cloudRole === 'p1' && state.winner === 'p1') ||
+        (this.cloudRole === 'p2' && state.winner === 'p2')
+      );
+      return;
+    }
+    const myScore = this.cloudRole === 'p2' ? s2 : s1;
+    const oppScore = this.cloudRole === 'p2' ? s1 : s2;
+    this.onGameOver(myScore > oppScore);
   }
 
   pushBallSnap(x, y, vx, vy, reset = false) {
@@ -519,7 +551,7 @@ export class BadmintonEngine {
 
       const currentInputKey = `${this.keys.left ? 1 : 0},${this.keys.right ? 1 : 0},${this.keys.up ? 1 : 0},${this.keys.down ? 1 : 0},${hit}`;
       const wsOpen = this.ws && this.ws.readyState === WebSocket.OPEN;
-      const inputInterval = wsOpen ? 16 : 50;
+      const inputInterval = wsOpen ? 33 : 50;
       if (currentInputKey !== this.lastSentInputKey || hit || (now - this.lastInputSendTime > inputInterval)) {
         this.lastInputSendTime = now;
         this.lastSentInputKey = currentInputKey;
@@ -779,7 +811,7 @@ export class BadmintonEngine {
     // 解決 Mac 120Hz ProMotion 螢幕 / Safari 與 Windows 60Hz 的幀率差異，確保在任何刷新率下均維持最極致絲滑度！
     const dtRatio = Math.max(0.1, Math.min(3.0, elapsed / 16.666));
     const usingWs = this.lastWsStateTime && (performance.now() - this.lastWsStateTime) < 2500;
-    const smoothTarget = usingWs ? 0.7 : 0.4;
+    const smoothTarget = usingWs ? 0.55 : 0.4;
     const smoothFactor = 1 - Math.pow(1 - smoothTarget, dtRatio);
 
     const isP1 = (this.cloudRole === 'p1');
@@ -806,21 +838,49 @@ export class BadmintonEngine {
       else this.smoothP2.y += (targetP2Y - this.smoothP2.y) * smoothFactor;
     }
 
-    // 球畫伺服器座標，不外推，避免擊球當下看起來停在頭上再飛走
-    this.smoothBall.x = targetBallX;
-    this.smoothBall.y = targetBallY;
+    // 球追伺服器座標（只內插、不外推），30Hz 封包在 60Hz 畫面才不會一格一格跳
+    if (this.roundState === 'scoring' || this.roundState === 'game_over' ||
+        Math.abs(this.smoothBall.x - targetBallX) > 36 ||
+        Math.abs(this.smoothBall.y - targetBallY) > 36) {
+      this.smoothBall.x = targetBallX;
+      this.smoothBall.y = targetBallY;
+    } else {
+      this.smoothBall.x += (targetBallX - this.smoothBall.x) * smoothFactor;
+      this.smoothBall.y += (targetBallY - this.smoothBall.y) * smoothFactor;
+    }
   }
 
-  drawTiledSprite(name, rectX, rectY, rectW, rectH) {
+  drawTiledSprite(name, rectX, rectY, rectW, rectH, ctx = this.ctx) {
     if (!this.spriteLoaded) return;
     const frameData = this.spriteData[name];
     if (!frameData) return;
     const f = frameData.frame;
     for (let y = rectY; y < rectY + rectH; y += f.h) {
       for (let x = rectX; x < rectX + rectW; x += f.w) {
-        this.ctx.drawImage(this.spriteImg, f.x, f.y, f.w, f.h, x, y, f.w, f.h);
+        ctx.drawImage(this.spriteImg, f.x, f.y, f.w, f.h, x, y, f.w, f.h);
       }
     }
+  }
+
+  ensureStaticLayer() {
+    if (this._staticLayer || !this.spriteLoaded || !this.spriteImg.complete) return;
+    const layer = document.createElement('canvas');
+    layer.width = this.logicalWidth;
+    layer.height = this.logicalHeight;
+    const x = layer.getContext('2d');
+    x.imageSmoothingEnabled = false;
+    if (this.bgLoaded) {
+      x.drawImage(this.bgImg, 0, 0, 432, 248);
+    } else {
+      x.fillStyle = '#70b8e8';
+      x.fillRect(0, 0, 432, 248);
+    }
+    this.drawTiledSprite('objects/ground_red.png', 0, 248, 432, 16, x);
+    this.drawTiledSprite('objects/ground_yellow.png', 0, 264, 432, 40, x);
+    const netX = 216 - 4;
+    this.drawTiledSprite('objects/net_pillar_top.png', netX, 176, 8, 8, x);
+    this.drawTiledSprite('objects/net_pillar.png', netX, 184, 8, 64, x);
+    this._staticLayer = layer;
   }
 
   /**
@@ -829,73 +889,51 @@ export class BadmintonEngine {
   drawSmoothShadow(x, y, radiusX, radiusY, alpha = 0.35) {
     if (alpha <= 0) return;
     const ctx = this.ctx;
-    ctx.save();
-    ctx.beginPath();
-    ctx.translate(x, y);
-    ctx.scale(1, radiusY / radiusX);
-    const grad = ctx.createRadialGradient(0, 0, 0, 0, 0, radiusX);
-    grad.addColorStop(0, `rgba(0, 0, 0, ${alpha})`);
-    grad.addColorStop(0.7, `rgba(0, 0, 0, ${alpha * 0.5})`);
-    grad.addColorStop(1, 'rgba(0, 0, 0, 0)');
-    ctx.fillStyle = grad;
-    ctx.arc(0, 0, radiusX, 0, Math.PI * 2);
-    ctx.fill();
-    ctx.restore();
+    ctx.fillStyle = `rgba(0, 0, 0, ${alpha})`;
+    ctx.fillRect(x - radiusX, y - radiusY, radiusX * 2, radiusY * 2);
   }
 
   draw() {
     if (!this.spriteLoaded) return;
 
     const ctx = this.ctx;
+    ctx.imageSmoothingEnabled = false;
 
     ctx.save();
-    // 放大至 2x 高解析度
     ctx.scale(this.scale, this.scale);
 
-    // ── 1. 浪漫戶外婚禮花園背景 (KAY & TONY WEDDING) ──
-    if (this.bgLoaded) {
-      // 繪製高畫質背景 (0~248px)
+    this.ensureStaticLayer();
+    if (this._staticLayer) {
+      ctx.drawImage(this._staticLayer, 0, 0);
+    } else if (this.bgLoaded) {
       ctx.drawImage(this.bgImg, 0, 0, 432, 248);
     } else {
       ctx.fillStyle = '#70b8e8';
       ctx.fillRect(0, 0, 432, 248);
     }
 
-    // ── 2. 浪漫玫瑰花瓣漂浮系統 ──
-    for (const p of this.petals) {
-      p.wobble += p.wobbleSpeed;
-      p.x += p.speedX + Math.sin(p.wobble) * 0.3;
-      p.y += p.speedY;
-      p.rot += p.rotSpeed;
+    // 連線對戰略過花瓣，避免手機/LINE 每幀旋轉 ellipse 拖垮幀率
+    if (!this.lowFx && this.multiplayerRole === 'single') {
+      for (const p of this.petals) {
+        p.wobble += p.wobbleSpeed;
+        p.x += p.speedX + Math.sin(p.wobble) * 0.3;
+        p.y += p.speedY;
+        p.rot += p.rotSpeed;
 
-      if (p.y > 248) {
-        p.y = -10;
-        p.x = Math.random() * 432;
-      }
-      if (p.x > 432) {
-        p.x = -10;
-      }
+        if (p.y > 248) {
+          p.y = -10;
+          p.x = Math.random() * 432;
+        }
+        if (p.x > 432) {
+          p.x = -10;
+        }
 
-      ctx.save();
-      ctx.translate(p.x, p.y);
-      ctx.rotate(p.rot);
-      ctx.fillStyle = p.color;
-      ctx.beginPath();
-      ctx.ellipse(0, 0, p.size, p.size * 0.65, 0, 0, Math.PI * 2);
-      ctx.fill();
-      ctx.restore();
+        ctx.fillStyle = p.color;
+        ctx.fillRect(p.x, p.y, p.size, p.size * 0.7);
+      }
     }
 
-    // ── 3. 地板 (婚禮沙灘球場，帶有精緻邊緣) ──
-    this.drawTiledSprite('objects/ground_red.png',    0, 248, 432, 16);
-    this.drawTiledSprite('objects/ground_yellow.png', 0, 264, 432, 40);
-
-    // ── 4. 網柱 ──
-    const netX = 216 - 4;
-    this.drawTiledSprite('objects/net_pillar_top.png', netX, 176, 8, 8);
-    this.drawTiledSprite('objects/net_pillar.png',     netX, 184, 8, 64);
-
-    // ── 5. 動態柔和陰影 ──
+    // ── 動態陰影、角色與球 ──
     const p1 = this.pikaPhysics.player1;
     const p2 = this.pikaPhysics.player2;
     const b = this.pikaPhysics.ball;
@@ -1014,11 +1052,13 @@ export class BadmintonEngine {
 
     this.accumulator = (this.accumulator || 0) + elapsed;
     const fixedTimeStep = 1000 / 30;
-
-    while (this.accumulator >= fixedTimeStep) {
+    let steps = 0;
+    while (this.accumulator >= fixedTimeStep && steps < 2) {
       this.update();
       this.accumulator -= fixedTimeStep;
+      steps++;
     }
+    if (this.accumulator > fixedTimeStep * 3) this.accumulator = 0;
 
     // 每一幀進行高刷新率自適應平滑補間插值 (Lerp)
     this.updateSmoothPositions(elapsed);

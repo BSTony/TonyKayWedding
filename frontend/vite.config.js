@@ -1,6 +1,6 @@
 // Author: Tony Hsieh
 // Date: 2026-08-27
-// Version: 2.3.9
+// Version: 2.3.10
 import { defineConfig } from 'vite';
 import { resolve } from 'path';
 
@@ -10,7 +10,7 @@ const buildTime = now.toLocaleDateString('zh-TW', { timeZone: 'Asia/Taipei' }) +
 
 export default defineConfig({
   define: {
-    __APP_VERSION__: JSON.stringify('v2.3.9'),
+    __APP_VERSION__: JSON.stringify('v2.3.10'),
     __BUILD_TIME__: JSON.stringify(buildTime)
   },
   build: {
