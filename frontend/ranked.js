@@ -1,6 +1,6 @@
 // Author: Tony Hsieh
 // Date: 2026-08-27
-// Version: 2.3.3
+// Version: 2.3.4
 import './version.js';
 import { db, ref, onValue, set, update, remove, increment, onDisconnect } from './firebase.js';
 import { BadmintonEngine, setGlobalEngine } from './badmintonEngine.js';
@@ -590,10 +590,7 @@ function bindRealtimeMatch(roomId) {
   const inputPath = myRole === 'p1' ? '/p1Input' : '/p2Input';
 
   const sendInput = (input) => {
-    const wsOpen = gameEngine && gameEngine.ws && gameEngine.ws.readyState === 1;
-    if (!wsOpen) {
-      set(ref(db, roomBase + inputPath), input).catch(() => {});
-    }
+    set(ref(db, roomBase + inputPath), input).catch(() => {});
   };
 
   onDisconnect(ref(db, roomBase + '/abandoned')).set({ by: uid, name: nickname }).catch(() => {});

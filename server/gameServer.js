@@ -1,6 +1,6 @@
 // Author: Tony Hsieh
 // Date: 2026-08-27
-// Version: 1.4.1
+// Version: 1.4.2
 import http from 'http';
 import express from 'express';
 import { WebSocketServer, WebSocket } from 'ws';
@@ -90,15 +90,30 @@ const GROUND_WIDTH = 432;
 const GROUND_Y = 244;
 const NET_SYNC_MAX_DELTA = 120;
 
+const pendingInputs = {};
+
+function stashPendingInput(roomId, role, input) {
+  if (!roomId || !input || (role !== 'p1' && role !== 'p2')) return;
+  if (!pendingInputs[roomId]) pendingInputs[roomId] = {};
+  pendingInputs[roomId][role] = input;
+}
+
 function applyClientInput(room, role, input) {
-  if (!room || !input) return;
-  const isP2 = role === 'p2';
-  const key = isP2 ? 'p2Raw' : 'p1Raw';
+  if (!room || !input || (role !== 'p1' && role !== 'p2')) return;
+  const key = role === 'p2' ? 'p2Raw' : 'p1Raw';
   room[key] = { ...input };
   if (input.powerHit) {
-    if (isP2) room.p2HitHold = 4;
+    if (role === 'p2') room.p2HitHold = 4;
     else room.p1HitHold = 4;
   }
+}
+
+function flushPendingInputs(roomId, room) {
+  const pending = pendingInputs[roomId];
+  if (!pending || !room) return;
+  if (pending.p1) applyClientInput(room, 'p1', pending.p1);
+  if (pending.p2) applyClientInput(room, 'p2', pending.p2);
+  delete pendingInputs[roomId];
 }
 
 function fillUserInput(dest, raw, isP2, hitHold) {
@@ -382,6 +397,7 @@ function startServerRoomSimulation(roomId, roomData) {
   }, 1000 / 30);
 
   activeFirebaseRooms[roomId] = roomState;
+  flushPendingInputs(roomId, roomState);
 }
 
 function stopServerRoomSimulation(roomId) {
@@ -390,6 +406,7 @@ function stopServerRoomSimulation(roomId) {
     if (room.loopTimer) clearInterval(room.loopTimer);
     if (room.unsubs) room.unsubs.forEach(u => typeof u === 'function' && u());
     delete activeFirebaseRooms[roomId];
+    delete pendingInputs[roomId];
     if (wsRooms[roomId]) delete wsRooms[roomId];
     console.log(`[Firebase Cloud Room ${roomId}] 房間物理計算結束釋放。`);
   }
@@ -415,8 +432,13 @@ wss.on('connection', (ws) => {
         clientRole = data.role; // 'p1' 或 'p2'
         if (!wsRooms[joinedRoomId]) wsRooms[joinedRoomId] = {};
         wsRooms[joinedRoomId][clientRole] = ws;
+        const room = activeFirebaseRooms[joinedRoomId];
+        if (room) flushPendingInputs(joinedRoomId, room);
       } else if (data.type === 'input') {
-        applyClientInput(activeFirebaseRooms[joinedRoomId], data.role || clientRole, data.input);
+        const role = data.role || clientRole;
+        const room = joinedRoomId && activeFirebaseRooms[joinedRoomId];
+        if (room) applyClientInput(room, role, data.input);
+        else stashPendingInput(joinedRoomId, role, data.input);
       }
     } catch (e) {}
   });

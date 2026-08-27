@@ -1,6 +1,6 @@
 // Author: Tony Hsieh
 // Date: 2026-08-27
-// Version: 2.3.3
+// Version: 2.3.4
 import { PikaPhysics, PikaUserInput, processPlayerMovementAndSetPlayerPosition } from './physics.js';
 
 /**
@@ -305,8 +305,8 @@ export class BadmintonEngine {
       this.yieldToCloudAuthority(this._wsRole || this.cloudRole || 'p1', this.onSendInput);
     }
 
-    // WebSocket 有在送畫面時，忽略較慢且可能衝突的 Firebase 快照
-    if (source !== 'ws' && this.lastWsStateTime && (performance.now() - this.lastWsStateTime) < 2500) {
+    // WebSocket 若短暫沒畫面，立刻改吃 Firebase，避免連上卻收不到輸入時對方角色凍結
+    if (source !== 'ws' && this.lastWsStateTime && (performance.now() - this.lastWsStateTime) < 250) {
       return;
     }
     if (state.ts && this.lastStateT && state.ts + 40 < this.lastStateT) {
@@ -552,7 +552,8 @@ export class BadmintonEngine {
             role: this.cloudRole,
             input: inputPayload
           }));
-        } else if (this.onSendInput) {
+        }
+        if (this.onSendInput) {
           this.onSendInput(inputPayload);
         }
       }
@@ -796,9 +797,9 @@ export class BadmintonEngine {
       this.smoothP1.x = targetP1X;
       this.smoothP1.y = targetP1Y;
     } else {
-      if (Math.abs(this.smoothP1.x - targetP1X) > 50) this.smoothP1.x = targetP1X;
+      if (Math.abs(this.smoothP1.x - targetP1X) > 12) this.smoothP1.x = targetP1X;
       else this.smoothP1.x += (targetP1X - this.smoothP1.x) * smoothFactor;
-      if (Math.abs(this.smoothP1.y - targetP1Y) > 50) this.smoothP1.y = targetP1Y;
+      if (Math.abs(this.smoothP1.y - targetP1Y) > 12) this.smoothP1.y = targetP1Y;
       else this.smoothP1.y += (targetP1Y - this.smoothP1.y) * smoothFactor;
     }
 
@@ -806,9 +807,9 @@ export class BadmintonEngine {
       this.smoothP2.x = targetP2X;
       this.smoothP2.y = targetP2Y;
     } else {
-      if (Math.abs(this.smoothP2.x - targetP2X) > 50) this.smoothP2.x = targetP2X;
+      if (Math.abs(this.smoothP2.x - targetP2X) > 12) this.smoothP2.x = targetP2X;
       else this.smoothP2.x += (targetP2X - this.smoothP2.x) * smoothFactor;
-      if (Math.abs(this.smoothP2.y - targetP2Y) > 50) this.smoothP2.y = targetP2Y;
+      if (Math.abs(this.smoothP2.y - targetP2Y) > 12) this.smoothP2.y = targetP2Y;
       else this.smoothP2.y += (targetP2Y - this.smoothP2.y) * smoothFactor;
     }
 
