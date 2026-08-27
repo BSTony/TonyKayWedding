@@ -1,3 +1,6 @@
+// Author: Tony Hsieh
+// Date: 2026-08-27
+// Version: 2.3.2
 import { PikaPhysics, PikaUserInput, processPlayerMovementAndSetPlayerPosition } from './physics.js';
 
 /**
@@ -94,6 +97,13 @@ export class BadmintonEngine {
     this.onSendInput = null;
     this.lastStateSendTime = 0;
     this.lastInputSendTime = 0;
+    this.lastWsStateTime = 0;
+    this.lastStateT = 0;
+    this._wsUrl = '';
+    this._wsRoomId = '';
+    this._wsRole = '';
+    this._wsClosedOnPurpose = false;
+    this._wsRetry = 0;
   }
 
   start(maxScore = 5, compBoldness = 2, onSendState = null) {
@@ -117,6 +127,7 @@ export class BadmintonEngine {
   startMultiplayer(role = 'host', maxScore = 5, onSendInput = null, onSendState = null) {
     this.isMultiplayer = true;
     this.multiplayerRole = role;
+    this.cloudRole = role === 'guest' ? 'p2' : 'p1';
     this.maxScore = maxScore;
     this.onSendInput = onSendInput;
     this.onSendState = onSendState;
@@ -170,7 +181,7 @@ export class BadmintonEngine {
   startCloudServer(wsUrl, roomId, role = 'p1', maxScore = 5) {
     this.isMultiplayer = true;
     this.multiplayerRole = 'cloud';
-    this.cloudRole = role; // 'p1' 或 'p2'
+    this.cloudRole = role;
     this.maxScore = maxScore;
     this.isRunning = true;
     this.roundState = 'playing';
@@ -182,50 +193,100 @@ export class BadmintonEngine {
     this.remoteHostState = null;
     this.lastInputSendTime = 0;
     this.lastSentInputKey = '';
+    this.attachWebSocket(wsUrl, roomId, role);
+    this.lastFrameTime = performance.now();
+    requestAnimationFrame(this.loop);
+  }
 
+  /**
+   * 主機讓出物理權威：改為只送輸入、接收雲端 / 遠端 state（不重置比分）
+   */
+  yieldToCloudAuthority(role = 'p1', onSendInput = null) {
+    this.multiplayerRole = 'firebase';
+    this.cloudRole = role;
+    this.onSendState = null;
+    if (onSendInput) this.onSendInput = onSendInput;
+    this.stopBackgroundPhysics();
+  }
+
+  adoptHostAuthority(onSendState = null) {
+    if (this.multiplayerRole === 'host') return;
+    this.multiplayerRole = 'host';
+    this.cloudRole = 'p1';
+    this.onSendState = onSendState;
+    this.roundState = 'playing';
+    this.stopBackgroundPhysics();
+  }
+
+  /**
+   * 附加雲端 WebSocket（不重置局況）。WS 有資料時會忽略較慢的 Firebase 畫面。
+   */
+  attachWebSocket(wsUrl, roomId, role) {
+    if (!wsUrl || !this.isRunning) return;
+    if (this.ws && this._wsUrl === wsUrl && (this.ws.readyState === WebSocket.OPEN || this.ws.readyState === WebSocket.CONNECTING)) {
+      return;
+    }
+    this._wsUrl = wsUrl;
+    this._wsRoomId = roomId;
+    this._wsRole = role || this.cloudRole || 'p1';
+    this.cloudRole = this._wsRole;
+    this._wsClosedOnPurpose = false;
+    this._openWebSocket();
+  }
+
+  _openWebSocket() {
+    if (!this._wsUrl || this._wsClosedOnPurpose) return;
     try {
-      this.ws = new WebSocket(wsUrl);
-
+      if (this.ws) {
+        try { this.ws.onclose = null; this.ws.close(); } catch (e) {}
+        this.ws = null;
+      }
+      this.ws = new WebSocket(this._wsUrl);
       this.ws.onopen = () => {
-        console.log(`[Cloud Server] 已連線至雲端伺服器: ${wsUrl}`);
+        this._wsRetry = 0;
+        if (this.multiplayerRole === 'host') {
+          this.yieldToCloudAuthority(this._wsRole || this.cloudRole || 'p1', this.onSendInput);
+        }
         this.ws.send(JSON.stringify({
           type: 'join',
-          roomId,
-          role,
-          maxScore
+          roomId: this._wsRoomId,
+          role: this._wsRole,
+          maxScore: this.maxScore
         }));
       };
-
       this.ws.onmessage = (evt) => {
         try {
           const data = JSON.parse(evt.data);
           const t = data.t || data.type;
-
-          if (t === 's') { // 雲端權威狀態廣播
-            this.receiveRemoteState(data);
+          if (t === 's') {
+            this.lastWsStateTime = performance.now();
+            this.receiveRemoteState(data, 'ws');
           } else if (t === 'game_over') {
             this.roundState = 'game_over';
             const won = (this.cloudRole === 'p1' && data.winner === 'p1') || (this.cloudRole === 'p2' && data.winner === 'p2');
             if (this.onGameOver) this.onGameOver(won);
           }
-        } catch (e) {
-          console.error('[WS Parse Error]', e);
-        }
+        } catch (e) {}
       };
-
-      this.ws.onerror = (err) => {
-        console.warn('[Cloud Server] WebSocket 連線異常:', err);
-      };
-
+      this.ws.onerror = () => {};
       this.ws.onclose = () => {
-        console.log('[Cloud Server] WebSocket 連線關閉');
+        this.ws = null;
+        this._scheduleWsReconnect();
       };
     } catch (err) {
-      console.warn('[Cloud Server] 無法建立 WebSocket 連線:', err);
+      this._scheduleWsReconnect();
     }
+  }
 
-    this.lastFrameTime = performance.now();
-    requestAnimationFrame(this.loop);
+  _scheduleWsReconnect() {
+    if (!this.isRunning || this._wsClosedOnPurpose || !this._wsUrl) return;
+    if (this._wsRetry >= 8) return;
+    this._wsRetry += 1;
+    const delay = Math.min(4000, 400 * this._wsRetry);
+    setTimeout(() => {
+      if (!this.isRunning || this._wsClosedOnPurpose) return;
+      this._openWebSocket();
+    }, delay);
   }
 
   // Host 接收 Guest 傳來的即時搖桿指令
@@ -235,8 +296,24 @@ export class BadmintonEngine {
   }
 
   // 接收伺服器廣播的權威畫面（適用 cloud, guest, firebase 模式）
-  receiveRemoteState(state) {
+  receiveRemoteState(state, source = 'rtdb') {
     if (!state) return;
+    if ((this.multiplayerRole === 'host' || this.multiplayerRole === 'single') && source !== 'ws') {
+      return;
+    }
+    if (this.multiplayerRole === 'host' && source === 'ws') {
+      this.yieldToCloudAuthority(this._wsRole || this.cloudRole || 'p1', this.onSendInput);
+    }
+
+    // WebSocket 有在送畫面時，忽略較慢且可能衝突的 Firebase 快照
+    if (source !== 'ws' && this.lastWsStateTime && (performance.now() - this.lastWsStateTime) < 2500) {
+      return;
+    }
+    if (state.ts && this.lastStateT && state.ts + 40 < this.lastStateT) {
+      return;
+    }
+    if (state.ts) this.lastStateT = state.ts;
+
     this.remoteHostState = state;
 
     const p1 = this.pikaPhysics.player1;
@@ -246,81 +323,62 @@ export class BadmintonEngine {
     const isPredicted = (this.multiplayerRole === 'firebase' || this.multiplayerRole === 'cloud' || this.multiplayerRole === 'guest') && (this.cloudRole !== 'spectate');
     const isP1 = (this.cloudRole === 'p1');
     const isP2 = (this.cloudRole === 'p2');
+    const hardReset = !!(state.newRound || state.round === 'scoring' || state.round === 'game_over' || this.roundState !== 'playing');
 
-    // 1. 同步 P1
-    if (state.p1) {
-      const sX = Number.isFinite(state.p1.x) ? state.p1.x : 36;
-      const sY = Number.isFinite(state.p1.y) ? state.p1.y : 244;
-      const sState = state.p1.s !== undefined ? state.p1.s : (state.p1.state !== undefined ? state.p1.state : 0);
-      const sFrame = state.p1.f !== undefined ? state.p1.f : (state.p1.frameNumber !== undefined ? state.p1.frameNumber : 0);
+    const applyActor = (actor, snap, isLocal, defaultDive) => {
+      if (!snap) return;
+      const sX = Number.isFinite(snap.x) ? snap.x : actor.x;
+      const sY = Number.isFinite(snap.y) ? snap.y : actor.y;
+      const sState = snap.s !== undefined ? snap.s : (snap.state !== undefined ? snap.state : actor.state);
+      const sFrame = snap.f !== undefined ? snap.f : (snap.frameNumber !== undefined ? snap.frameNumber : actor.frameNumber);
+      const sDive = snap.d !== undefined ? snap.d : (snap.divingDirection !== undefined ? snap.divingDirection : defaultDive);
 
-      if (isPredicted && isP1) {
-        // 本地是 P1：本人物理以本地 0ms 預測為主，僅在重大偏差或換局時校正
-        const diffX = Math.abs(p1.x - sX);
-        const diffY = Math.abs(p1.y - sY);
-        if (diffX > 48 || diffY > 48 || this.roundState !== 'playing' || state.newRound) {
-          p1.x = sX;
-          p1.y = sY;
-          p1.state = sState;
-          p1.frameNumber = sFrame;
+      if (isPredicted && isLocal) {
+        // 本人角色只在換局/得分時對齊伺服器，對戰中絕不倒帶（否則會像回放）
+        if (hardReset) {
+          actor.x = sX;
+          actor.y = sY;
+          actor.state = sState;
+          actor.frameNumber = sFrame;
+          actor.divingDirection = sDive;
         }
-      } else {
-        // 本地是 P2 或觀戰：P1 100% 聽從伺服器
-        p1.x = sX;
-        p1.y = sY;
-        p1.state = sState;
-        p1.frameNumber = sFrame;
+        return;
       }
-      p1.divingDirection = state.p1.d !== undefined ? state.p1.d : (state.p1.divingDirection || 1);
-    }
 
-    // 2. 同步 P2
-    if (state.p2) {
-      const sX = Number.isFinite(state.p2.x) ? state.p2.x : 396;
-      const sY = Number.isFinite(state.p2.y) ? state.p2.y : 244;
-      const sState = state.p2.s !== undefined ? state.p2.s : (state.p2.state !== undefined ? state.p2.state : 0);
-      const sFrame = state.p2.f !== undefined ? state.p2.f : (state.p2.frameNumber !== undefined ? state.p2.frameNumber : 0);
+      actor.x = sX;
+      actor.y = sY;
+      actor.state = sState;
+      actor.frameNumber = sFrame;
+      actor.divingDirection = sDive;
+    };
 
-      if (isPredicted && isP2) {
-        // 本地是 P2：本人物理以本地 0ms 預測為主，僅在重大偏差或換局時校正
-        const diffX = Math.abs(p2.x - sX);
-        const diffY = Math.abs(p2.y - sY);
-        if (diffX > 48 || diffY > 48 || this.roundState !== 'playing' || state.newRound) {
-          p2.x = sX;
-          p2.y = sY;
-          p2.state = sState;
-          p2.frameNumber = sFrame;
-        }
-      } else {
-        // 本地是 P1 或觀戰：P2 100% 聽從伺服器
-        p2.x = sX;
-        p2.y = sY;
-        p2.state = sState;
-        p2.frameNumber = sFrame;
-      }
-      p2.divingDirection = state.p2.d !== undefined ? state.p2.d : (state.p2.divingDirection || -1);
-    }
+    applyActor(p1, state.p1, isP1, 1);
+    applyActor(p2, state.p2, isP2, -1);
 
-    // 3. 同步排球 (權威伺服器物理 + 拋物線推算)
     if (state.b) {
-      b.x = Number.isFinite(state.b.x) ? state.b.x : 56;
-      b.y = Number.isFinite(state.b.y) ? state.b.y : 0;
-      b.xVelocity = Number.isFinite(state.b.vx) ? state.b.vx : 0;
-      b.yVelocity = Number.isFinite(state.b.vy) ? state.b.vy : 1;
-      b.rotation = state.b.r !== undefined ? state.b.r : (state.b.rot || 0);
-      b.isPowerHit = state.b.p !== undefined ? !!state.b.p : !!state.b.power;
+      const nx = Number.isFinite(state.b.x) ? state.b.x : 56;
+      const ny = Number.isFinite(state.b.y) ? state.b.y : 0;
+      const nvx = Number.isFinite(state.b.vx) ? state.b.vx : 0;
+      const nvy = Number.isFinite(state.b.vy) ? state.b.vy : 1;
+      const nrot = state.b.r !== undefined ? state.b.r : (state.b.rot || 0);
+      const npower = state.b.p !== undefined ? !!state.b.p : !!state.b.power;
 
-      this.ballServerPos = {
-        x: b.x,
-        y: b.y,
-        vx: b.xVelocity,
-        vy: b.yVelocity,
-        time: performance.now()
-      };
+      b.xVelocity = nvx;
+      b.yVelocity = nvy;
+      b.rotation = nrot;
+      b.isPowerHit = npower;
+      this.pushBallSnap(nx, ny, nvx, nvy, hardReset);
+      if (hardReset) {
+        b.x = nx;
+        b.y = ny;
+      }
     }
 
-    // 🌟 換局或得分時：立即重置平滑位置，防止任何飄移/慢速拖曳
-    if (state.newRound || state.round === 'scoring' || state.round === 'game_over' || !this.smoothBall) {
+    if (hardReset) {
+      this.smoothP1 = { x: p1.x, y: p1.y };
+      this.smoothP2 = { x: p2.x, y: p2.y };
+      this.smoothBall = { x: b.x, y: b.y };
+    } else if (!this.smoothBall) {
       this.smoothP1 = { x: p1.x, y: p1.y };
       this.smoothP2 = { x: p2.x, y: p2.y };
       this.smoothBall = { x: b.x, y: b.y };
@@ -354,11 +412,54 @@ export class BadmintonEngine {
     }
   }
 
+  pushBallSnap(x, y, vx, vy, reset = false) {
+    const now = performance.now();
+    if (reset || !this._ballSnaps) this._ballSnaps = [];
+    const last = this._ballSnaps[this._ballSnaps.length - 1];
+    if (last && now - last.t < 10) {
+      last.x = x;
+      last.y = y;
+      last.vx = vx;
+      last.vy = vy;
+      last.t = now;
+      return;
+    }
+    this._ballSnaps.push({ t: now, x, y, vx, vy });
+    if (this._ballSnaps.length > 12) this._ballSnaps.shift();
+  }
+
+  sampleBallVisual(delayMs = 48) {
+    const snaps = this._ballSnaps;
+    if (!snaps || !snaps.length) return null;
+    const at = performance.now() - delayMs;
+    if (at <= snaps[0].t) return { x: snaps[0].x, y: snaps[0].y };
+    const last = snaps[snaps.length - 1];
+    if (at >= last.t) {
+      const dt = Math.min((at - last.t) / 33.333, 1.5);
+      let y = last.y + last.vy * dt + 0.5 * 0.8 * dt * dt;
+      if (y > 252) y = 252;
+      if (y < 0) y = 0;
+      return { x: last.x + last.vx * dt, y };
+    }
+    for (let i = 1; i < snaps.length; i++) {
+      if (at <= snaps[i].t) {
+        const a = snaps[i - 1];
+        const b = snaps[i];
+        const u = (at - a.t) / Math.max(1, b.t - a.t);
+        return { x: a.x + (b.x - a.x) * u, y: a.y + (b.y - a.y) * u };
+      }
+    }
+    return { x: last.x, y: last.y };
+  }
+
   stop() {
     this.isRunning = false;
     this.roundState = 'idle';
+    this._wsClosedOnPurpose = true;
+    this.stopBackgroundPhysics();
     if (this.ws) {
-      try { this.ws.close(); } catch (e) {}
+      try { this.ws.onclose = null; this.ws.close(); } catch (e) {}
+      this.ws = null;
     }
   }
 
@@ -409,8 +510,10 @@ export class BadmintonEngine {
       const hit = this.powerHitBuffer > 0 ? 1 : 0;
       const currentInputKey = `${this.keys.left ? 1 : 0},${this.keys.right ? 1 : 0},${this.keys.up ? 1 : 0},${this.keys.down ? 1 : 0},${hit}`;
 
-      // 1. 發送指令給伺服器 (按鍵變動時立即 0ms 送出，長按時以 50ms 節流保活)
-      if (currentInputKey !== this.lastSentInputKey || hit || (now - this.lastInputSendTime > 50)) {
+      // 1. 發送指令：WS 連線時只走 WebSocket（按鍵變動立即送、長按 33ms），不再塞 Firebase
+      const wsOpen = this.ws && this.ws.readyState === WebSocket.OPEN;
+      const inputInterval = wsOpen ? 33 : 90;
+      if (currentInputKey !== this.lastSentInputKey || hit || (now - this.lastInputSendTime > inputInterval)) {
         this.lastInputSendTime = now;
         this.lastSentInputKey = currentInputKey;
         if (hit && this.powerHitBuffer > 0) this.powerHitBuffer--;
@@ -423,13 +526,14 @@ export class BadmintonEngine {
           powerHit: hit
         };
 
-        if (this.onSendInput) this.onSendInput(inputPayload);
-        if (this.ws && this.ws.readyState === WebSocket.OPEN) {
+        if (wsOpen) {
           this.ws.send(JSON.stringify({
             type: 'input',
             role: this.cloudRole,
             input: inputPayload
           }));
+        } else if (this.onSendInput) {
+          this.onSendInput(inputPayload);
         }
       }
 
@@ -485,6 +589,35 @@ export class BadmintonEngine {
       }
     } else {
       p1Input.powerHit = 0;
+    }
+
+    if (this.onSendInput && this.multiplayerRole === 'host') {
+      const hit = p1Input.powerHit ? 1 : 0;
+      const currentInputKey = `${this.keys.left ? 1 : 0},${this.keys.right ? 1 : 0},${this.keys.up ? 1 : 0},${this.keys.down ? 1 : 0},${hit}`;
+      if (currentInputKey !== this.lastSentInputKey || hit || (now - this.lastInputSendTime > 90)) {
+        this.lastInputSendTime = now;
+        this.lastSentInputKey = currentInputKey;
+        this.onSendInput({
+          left: !!this.keys.left,
+          right: !!this.keys.right,
+          up: !!this.keys.up,
+          down: !!this.keys.down,
+          powerHit: hit
+        });
+        if (this.ws && this.ws.readyState === WebSocket.OPEN) {
+          this.ws.send(JSON.stringify({
+            type: 'input',
+            role: this.cloudRole || 'p1',
+            input: {
+              left: !!this.keys.left,
+              right: !!this.keys.right,
+              up: !!this.keys.up,
+              down: !!this.keys.down,
+              powerHit: hit
+            }
+          }));
+        }
+      }
     }
 
     // P2 輸入 (若為多人連線使用 Guest 輸入，否則由 AI 操控)
@@ -549,7 +682,8 @@ export class BadmintonEngine {
             s1: this.playerScore,
             s2: this.compScore,
             round: 'game_over',
-            punch: punchEvent
+            punch: punchEvent,
+            ts: Date.now()
           });
         }
       } else {
@@ -574,7 +708,7 @@ export class BadmintonEngine {
 
     // ── 廣播即時權威畫面狀態給 Guest 或 Spectators ──
     if (this.onSendState && (this.multiplayerRole === 'host' || this.multiplayerRole === 'single')) {
-      if (now - this.lastStateSendTime > 33 || punchEvent || isBallTouchingGround) {
+      if (now - this.lastStateSendTime > 80 || punchEvent || isBallTouchingGround) {
         this.lastStateSendTime = now;
         this.onSendState({
           p1: { x: Math.round(p1.x * 10) / 10, y: Math.round(p1.y * 10) / 10, s: p1.state, f: p1.frameNumber, d: p1.divingDirection },
@@ -587,7 +721,8 @@ export class BadmintonEngine {
           s1: this.playerScore,
           s2: this.compScore,
           round: this.roundState,
-          punch: punchEvent
+          punch: punchEvent,
+          ts: Date.now()
         });
       }
     }
@@ -654,51 +789,53 @@ export class BadmintonEngine {
     // 🌟 自適應幀率阻尼算法 (Frame-Rate Independent Damping)
     // 解決 Mac 120Hz ProMotion 螢幕 / Safari 與 Windows 60Hz 的幀率差異，確保在任何刷新率下均維持最極致絲滑度！
     const dtRatio = Math.max(0.1, Math.min(3.0, elapsed / 16.666));
-    const smoothFactor = 1 - Math.pow(1 - 0.60, dtRatio);
+    const usingWs = this.lastWsStateTime && (performance.now() - this.lastWsStateTime) < 2500;
+    const smoothTarget = usingWs ? 0.35 : 0.22;
+    const smoothFactor = 1 - Math.pow(1 - smoothTarget, dtRatio);
 
+    const isP1 = (this.cloudRole === 'p1');
     const isP2 = (this.cloudRole === 'p2');
 
-    // P1 (遠端對手) 平滑跟隨
-    if (Math.abs(this.smoothP1.x - targetP1X) > 50) this.smoothP1.x = targetP1X;
-    else this.smoothP1.x += (targetP1X - this.smoothP1.x) * smoothFactor;
+    // 本人角色立刻跟上預測座標，避免被平滑算法拖成「鈍鈍的」
+    if (isP1) {
+      this.smoothP1.x = targetP1X;
+      this.smoothP1.y = targetP1Y;
+    } else {
+      if (Math.abs(this.smoothP1.x - targetP1X) > 50) this.smoothP1.x = targetP1X;
+      else this.smoothP1.x += (targetP1X - this.smoothP1.x) * smoothFactor;
+      if (Math.abs(this.smoothP1.y - targetP1Y) > 50) this.smoothP1.y = targetP1Y;
+      else this.smoothP1.y += (targetP1Y - this.smoothP1.y) * smoothFactor;
+    }
 
-    if (Math.abs(this.smoothP1.y - targetP1Y) > 50) this.smoothP1.y = targetP1Y;
-    else this.smoothP1.y += (targetP1Y - this.smoothP1.y) * smoothFactor;
-
-    // P2 (若本地是 2P，本人 100% 依據本地預測，0 延遲！)
     if (isP2) {
       this.smoothP2.x = targetP2X;
       this.smoothP2.y = targetP2Y;
     } else {
       if (Math.abs(this.smoothP2.x - targetP2X) > 50) this.smoothP2.x = targetP2X;
       else this.smoothP2.x += (targetP2X - this.smoothP2.x) * smoothFactor;
-
       if (Math.abs(this.smoothP2.y - targetP2Y) > 50) this.smoothP2.y = targetP2Y;
       else this.smoothP2.y += (targetP2Y - this.smoothP2.y) * smoothFactor;
     }
 
-    // 羽毛球 Dead Reckoning 拋物線外推
-    if (this.ballServerPos && this.roundState === 'playing') {
+    // 羽毛球：用快照插值連續飛行，避免瞬間傳送
+    const sampled = this.sampleBallVisual(48);
+    if (sampled) {
+      this.smoothBall.x = sampled.x;
+      this.smoothBall.y = sampled.y;
+      this.pikaPhysics.ball.x = sampled.x;
+      this.pikaPhysics.ball.y = sampled.y;
+    } else if (this.ballServerPos && this.roundState === 'playing') {
       const ballElapsed = Math.max(0, performance.now() - this.ballServerPos.time);
-      const tFrames = Math.min(ballElapsed / 33.333, 1.6);
-
+      const tFrames = Math.min(ballElapsed / 33.333, 8);
+      const gravity = 0.8;
       const estX = this.ballServerPos.x + this.ballServerPos.vx * tFrames;
-      let estY = this.ballServerPos.y + this.ballServerPos.vy * tFrames + 0.5 * 1.0 * tFrames * tFrames;
+      let estY = this.ballServerPos.y + this.ballServerPos.vy * tFrames + 0.5 * gravity * tFrames * tFrames;
       if (estY > 252) estY = 252;
-
-      if (Math.abs(this.smoothBall.x - estX) > 45 || Math.abs(this.smoothBall.y - estY) > 45) {
-        this.smoothBall.x = estX;
-        this.smoothBall.y = estY;
-      } else {
-        this.smoothBall.x += (estX - this.smoothBall.x) * smoothFactor;
-        this.smoothBall.y += (estY - this.smoothBall.y) * smoothFactor;
-      }
+      this.smoothBall.x += (estX - this.smoothBall.x) * smoothFactor;
+      this.smoothBall.y += (estY - this.smoothBall.y) * smoothFactor;
     } else {
-      if (Math.abs(this.smoothBall.x - targetBallX) > 45) this.smoothBall.x = targetBallX;
-      else this.smoothBall.x += (targetBallX - this.smoothBall.x) * smoothFactor;
-
-      if (Math.abs(this.smoothBall.y - targetBallY) > 45) this.smoothBall.y = targetBallY;
-      else this.smoothBall.y += (targetBallY - this.smoothBall.y) * smoothFactor;
+      this.smoothBall.x += (targetBallX - this.smoothBall.x) * smoothFactor;
+      this.smoothBall.y += (targetBallY - this.smoothBall.y) * smoothFactor;
     }
   }
 

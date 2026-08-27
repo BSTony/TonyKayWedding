@@ -1,0 +1,8 @@
+# Author: Tony Hsieh
+# Date: 2026-08-27
+# Version: 1.0.0
+.git
+**/node_modules
+frontend/dist
+*.log
+.cursor

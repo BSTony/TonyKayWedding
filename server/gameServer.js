@@ -1,3 +1,6 @@
+// Author: Tony Hsieh
+// Date: 2026-08-27
+// Version: 1.4.0
 import http from 'http';
 import express from 'express';
 import { WebSocketServer, WebSocket } from 'ws';
@@ -10,7 +13,49 @@ const app = express();
 const server = http.createServer(app);
 const PORT = process.env.PORT || 8080;
 
+app.use((req, res, next) => {
+  res.setHeader('Access-Control-Allow-Origin', '*');
+  next();
+});
 app.use(express.json());
+
+const DEFAULT_CLOUD_RUN_HTTP = 'https://badminton-server-308194662340.asia-east1.run.app';
+
+function toWsUrl(url) {
+  return String(url).trim().replace(/^https:/i, 'wss:').replace(/^http:/i, 'ws:').replace(/\/$/, '');
+}
+
+function getPublicWsUrlFromEnv() {
+  const explicit = process.env.WS_PUBLIC_URL || process.env.PUBLIC_WS_URL || process.env.CLOUD_RUN_SERVICE_URL || process.env.SERVICE_URL;
+  if (explicit) return toWsUrl(explicit);
+  if (process.env.K_SERVICE) return toWsUrl(DEFAULT_CLOUD_RUN_HTTP);
+  return toWsUrl(DEFAULT_CLOUD_RUN_HTTP);
+}
+
+let PUBLIC_WS_URL = getPublicWsUrlFromEnv();
+
+function publishServerInfo(wsUrl) {
+  if (!wsUrl) return;
+  PUBLIC_WS_URL = toWsUrl(wsUrl);
+  set(ref(db, 'serverInfo'), {
+    wsUrl: PUBLIC_WS_URL,
+    platform: 'gcp-cloud-run',
+    updatedAt: Date.now()
+  }).catch(() => {});
+  for (const roomId of Object.keys(activeFirebaseRooms)) {
+    update(ref(db, `rankedRooms/${roomId}`), { wsUrl: PUBLIC_WS_URL }).catch(() => {});
+  }
+}
+
+app.use((req, res, next) => {
+  if (!PUBLIC_WS_URL) {
+    const host = String(req.get('x-forwarded-host') || req.get('host') || '').split(',')[0].trim();
+    if (host && !host.startsWith('localhost') && !host.startsWith('127.0.0.1')) {
+      publishServerInfo('wss://' + host);
+    }
+  }
+  next();
+});
 
 // Firebase RTDB 設定 (與前端完全相同)
 const firebaseConfig = {
@@ -30,6 +75,7 @@ const auth = getAuth(fbApp);
 // 伺服器裁判以匿名身分取得 Firebase 授權
 signInAnonymously(auth).then(() => {
   console.log('🔒 雲端伺服器已成功取得 Firebase 安全認證 (auth != null)');
+  if (PUBLIC_WS_URL) publishServerInfo(PUBLIC_WS_URL);
 }).catch(err => {
   console.warn('伺服器認證提示:', err.message);
 });
@@ -93,7 +139,10 @@ function startServerRoomSimulation(roomId, roomData) {
   };
 
   // 標記此房間由雲端伺服器權威託管 (兩端玩家均不需當主機)
-  update(ref(db, `rankedRooms/${roomId}`), { serverHost: true }).catch(() => {});
+  update(ref(db, `rankedRooms/${roomId}`), {
+    serverHost: true,
+    ...(PUBLIC_WS_URL ? { wsUrl: PUBLIC_WS_URL } : {})
+  }).catch(() => {});
 
   // 監聽 1P 輸入 (Host 玩家，寫到 p1Input)
   const unsubsP1 = onValue(ref(db, `rankedRooms/${roomId}/p1Input`), (snap) => {
@@ -178,7 +227,8 @@ function startServerRoomSimulation(roomId, roomData) {
           s1: roomState.s1,
           s2: roomState.s2,
           round: 'game_over',
-          punch: punchEvent
+          punch: punchEvent,
+          ts: Date.now()
         };
         set(ref(db, `rankedRooms/${roomId}/state`), finalState).catch(() => {});
         // 標記房間結束
@@ -194,7 +244,8 @@ function startServerRoomSimulation(roomId, roomData) {
           s1: roomState.s1,
           s2: roomState.s2,
           round: 'scoring',
-          punch: punchEvent
+          punch: punchEvent,
+          ts: Date.now()
         };
         set(ref(db, `rankedRooms/${roomId}/state`), scoringState).catch(() => {});
 
@@ -213,7 +264,8 @@ function startServerRoomSimulation(roomId, roomData) {
             s1: roomState.s1,
             s2: roomState.s2,
             round: 'playing',
-            newRound: true
+            newRound: true,
+            ts: Date.now()
           };
           set(ref(db, `rankedRooms/${roomId}/state`), newRoundState).catch(() => {});
         }, 1100);
@@ -227,6 +279,7 @@ function startServerRoomSimulation(roomId, roomData) {
     if (sockets) {
       const wsPayload = JSON.stringify({
         t: 's',
+        ts: now,
         p1: { x: p1.x, y: p1.y, s: p1.state, f: p1.frameNumber, d: p1.divingDirection },
         p2: { x: p2.x, y: p2.y, s: p2.state, f: p2.frameNumber, d: p2.divingDirection },
         b: {
@@ -242,8 +295,12 @@ function startServerRoomSimulation(roomId, roomData) {
       if (sockets.p2 && sockets.p2.readyState === WebSocket.OPEN) sockets.p2.send(wsPayload);
     }
 
-    // 2. Firebase RTDB 同步備援
-    if (now - roomState.lastWriteTime > 40 || punchEvent || isTouchingGround) {
+    const hasWsClient = sockets && (
+      (sockets.p1 && sockets.p1.readyState === WebSocket.OPEN) ||
+      (sockets.p2 && sockets.p2.readyState === WebSocket.OPEN)
+    );
+    const rtdbInterval = hasWsClient ? 500 : 80;
+    if (now - roomState.lastWriteTime > rtdbInterval || punchEvent || isTouchingGround) {
       roomState.lastWriteTime = now;
       set(ref(db, `rankedRooms/${roomId}/state`), {
         p1: { x: p1.x, y: p1.y, state: p1.state, frameNumber: p1.frameNumber, divingDirection: p1.divingDirection },
@@ -255,7 +312,8 @@ function startServerRoomSimulation(roomId, roomData) {
         s1: roomState.s1,
         s2: roomState.s2,
         round: roomState.roundState,
-        punch: punchEvent
+        punch: punchEvent,
+        ts: now
       }).catch(() => {});
     }
   }, 1000 / 30);
@@ -275,12 +333,17 @@ function stopServerRoomSimulation(roomId) {
 }
 
 // ── WebSocket 連線閘道 (極速直連通道) ──
-const wss = new WebSocketServer({ server });
+const wss = new WebSocketServer({ server, perMessageDeflate: false });
 const wsRooms = {};
 
 wss.on('connection', (ws) => {
   let joinedRoomId = null;
   let clientRole = null;
+  const pingTimer = setInterval(() => {
+    if (ws.readyState === WebSocket.OPEN) {
+      try { ws.ping(); } catch (e) {}
+    }
+  }, 15000);
 
   ws.on('message', (raw) => {
     try {
@@ -301,6 +364,7 @@ wss.on('connection', (ws) => {
   });
 
   ws.on('close', () => {
+    clearInterval(pingTimer);
     if (joinedRoomId && wsRooms[joinedRoomId] && clientRole) {
       delete wsRooms[joinedRoomId][clientRole];
     }
@@ -312,6 +376,7 @@ app.get('/', (req, res) => {
     service: 'Badminton Realtime Cloud Physics Server',
     status: 'online',
     firebaseRooms: Object.keys(activeFirebaseRooms).length,
+    wsUrl: PUBLIC_WS_URL,
     timestamp: new Date().toISOString()
   });
 });

@@ -1,7 +1,11 @@
+// Author: Tony Hsieh
+// Date: 2026-08-27
+// Version: 2.3.2
 import './version.js';
-import { db, ref, onValue, set, get, update, remove, increment, onDisconnect } from './firebase.js';
+import { db, ref, onValue, set, update, remove, increment, onDisconnect } from './firebase.js';
 import { BadmintonEngine, setGlobalEngine } from './badmintonEngine.js';
 import { calculateRankedPoints } from './rankedScore.js';
+import { CLOUD_RUN_WS_URL } from './cloudServer.js';
 
 const uid = localStorage.getItem('wbc_uid') || ('user_' + Math.floor(Math.random() * 1000000));
 const nickname = localStorage.getItem('wbc_nickname') || '婚禮嘉賓';
@@ -72,7 +76,21 @@ let elapsedTimer = null;
 let elapsedSeconds = 0;
 let isSpectating = false;
 let spectatorUnsubs = [];
+let matchUnsubs = [];
 let activeSpectatedRoomId = null;
+
+function clearMatchUnsubs() {
+  matchUnsubs.forEach((u) => { try { u(); } catch (e) {} });
+  matchUnsubs = [];
+}
+
+function wakeCloudServer(wsUrl) {
+  if (!wsUrl) return;
+  try {
+    const httpUrl = String(wsUrl).replace(/^wss:/i, 'https:').replace(/^ws:/i, 'http:');
+    fetch(httpUrl, { cache: 'no-store' }).catch(() => {});
+  } catch (e) {}
+}
 
 function formatTime(sec) {
   const m = String(Math.floor(sec / 60)).padStart(2, '0');
@@ -235,7 +253,7 @@ function startSpectating(roomId, roomData) {
   spectatorUnsubs.push(onValue(ref(db, `rankedRooms/${roomId}/state`), snap => {
     const st = snap.val();
     if (st && gameEngine) {
-      gameEngine.receiveRemoteState(st);
+    gameEngine.receiveRemoteState(st, 'rtdb');
       arenaP1Score.textContent = st.s1 || 0;
       arenaP2Score.textContent = st.s2 || 0;
 
@@ -562,7 +580,100 @@ window.addEventListener('beforeunload', () => {
   if (currentRoomId && !matchEnded) {
     set(ref(db, 'rankedRooms/' + currentRoomId + '/abandoned'), { by: uid, name: nickname }).catch(() => {});
   }
+  clearMatchUnsubs();
 });
+
+function bindRealtimeMatch(roomId) {
+  clearMatchUnsubs();
+  const roomBase = 'rankedRooms/' + roomId;
+  const myRole = isHostPlayer ? 'p1' : 'p2';
+  const inputPath = myRole === 'p1' ? '/p1Input' : '/p2Input';
+
+  const sendInput = (input) => {
+    const wsOpen = gameEngine && gameEngine.ws && gameEngine.ws.readyState === 1;
+    if (!wsOpen) {
+      set(ref(db, roomBase + inputPath), input).catch(() => {});
+    }
+  };
+
+  onDisconnect(ref(db, roomBase + '/abandoned')).set({ by: uid, name: nickname }).catch(() => {});
+
+  const unsubAbandoned = onValue(ref(db, roomBase + '/abandoned'), (snap) => {
+    const ab = snap.val();
+    if (ab && !matchEnded) {
+      matchEnded = true;
+      clearMatchUnsubs();
+      if (gameEngine) gameEngine.stop();
+      const leaverName = ab.name || '對手';
+      modalIcon.textContent = '🏃‍♂️';
+      modalTitle.textContent = '比賽已取消';
+      modalDesc.textContent = `玩家【${leaverName}】已離開賽事，本局比賽無效（不計勝敗場與積分）！`;
+      matchModal.style.display = 'flex';
+    }
+  });
+  matchUnsubs.push(unsubAbandoned);
+
+  gameEngine.startFirebaseClient(myRole, sendInput, 5);
+
+  if (isHostPlayer) {
+    const unsubP2 = onValue(ref(db, roomBase + '/p2Input'), (snap) => {
+      const input = snap.val();
+      if (input && gameEngine && gameEngine.multiplayerRole === 'host') {
+        gameEngine.setRemoteGuestInput(input);
+      }
+    });
+    matchUnsubs.push(unsubP2);
+  }
+
+  const unsubState = onValue(ref(db, roomBase + '/state'), (snap) => {
+    const state = snap.val();
+    if (!state || !gameEngine) return;
+    if (gameEngine.multiplayerRole === 'host') return;
+    gameEngine.receiveRemoteState(state, 'rtdb');
+  });
+  matchUnsubs.push(unsubState);
+
+  const connectWs = (wsUrl) => {
+    if (!wsUrl || !gameEngine) return;
+    wakeCloudServer(wsUrl);
+    gameEngine.attachWebSocket(wsUrl, roomId, myRole);
+  };
+
+  connectWs(CLOUD_RUN_WS_URL);
+
+  if (isHostPlayer) {
+    const fallbackTimer = setTimeout(() => {
+      if (matchEnded || !gameEngine) return;
+      const wsLive = gameEngine.lastWsStateTime && (performance.now() - gameEngine.lastWsStateTime < 2000);
+      if (wsLive || gameEngine.roundState === 'playing' || gameEngine.roundState === 'scoring') return;
+      gameEngine.adoptHostAuthority((state) => {
+        if (!gameEngine || gameEngine.multiplayerRole !== 'host') return;
+        set(ref(db, roomBase + '/state'), state).catch(() => {});
+      });
+    }, 2000);
+    matchUnsubs.push(() => clearTimeout(fallbackTimer));
+  }
+
+  const unsubServerInfo = onValue(ref(db, 'serverInfo'), (snap) => {
+    const info = snap.val();
+    if (info && info.wsUrl) connectWs(info.wsUrl);
+  });
+  matchUnsubs.push(unsubServerInfo);
+
+  const unsubWs = onValue(ref(db, roomBase + '/wsUrl'), (snap) => {
+    const wsUrl = snap.val();
+    if (wsUrl) connectWs(wsUrl);
+  });
+  matchUnsubs.push(unsubWs);
+
+  const unsubHost = onValue(ref(db, roomBase + '/serverHost'), (snap) => {
+    if (!snap.val() || !gameEngine) return;
+    if (gameEngine.multiplayerRole === 'host') {
+      gameEngine.yieldToCloudAuthority('p1', sendInput);
+    }
+  });
+  matchUnsubs.push(unsubHost);
+}
 
 // 進入對決賽場
 function enterArenaMatch() {
@@ -593,6 +704,7 @@ function enterArenaMatch() {
 
   gameEngine.onGameOver = (playerWon) => {
     matchEnded = true;
+    clearMatchUnsubs();
     if (currentRoomId) {
       update(ref(db, 'rankedRooms/' + currentRoomId), { status: 'finished' }).catch(() => {});
       setTimeout(() => {
@@ -604,48 +716,7 @@ function enterArenaMatch() {
 
   // 判定真人連線對打 vs 單人 AI
   if (currentOpponent.isRealPlayer && currentRoomId) {
-    // 監聽是否有一方中途離開 / 斷線 (不計勝敗與積分)
-    onDisconnect(ref(db, 'rankedRooms/' + currentRoomId + '/abandoned')).set({ by: uid, name: nickname }).catch(() => {});
-
-    onValue(ref(db, 'rankedRooms/' + currentRoomId + '/abandoned'), (snap) => {
-      const ab = snap.val();
-      if (ab && !matchEnded) {
-        matchEnded = true;
-        if (gameEngine) gameEngine.stop();
-
-        const leaverName = ab.name || '對手';
-        modalIcon.textContent = '🏃‍♂️';
-        modalTitle.textContent = '比賽已取消';
-        modalDesc.textContent = `玩家【${leaverName}】已離開賽事，本局比賽無效（不計勝敗場與積分）！`;
-        matchModal.style.display = 'flex';
-      }
-    });
-
-    if (isHostPlayer) {
-      // 🌟 1P (Host) 權威主機模式：執行物理模擬，廣播狀態，接收 2P 操作
-      gameEngine.startMultiplayer('host', 5, null, (state) => {
-        set(ref(db, 'rankedRooms/' + currentRoomId + '/state'), state).catch(() => {});
-      });
-
-      onValue(ref(db, 'rankedRooms/' + currentRoomId + '/p2Input'), (snap) => {
-        const input = snap.val();
-        if (input && gameEngine) {
-          gameEngine.setRemoteGuestInput(input);
-        }
-      });
-    } else {
-      // 🌟 2P (Guest) 客戶端模式：將本地操作送至 Firebase，接收 1P 權威狀態渲染
-      gameEngine.startFirebaseClient('p2', (input) => {
-        set(ref(db, 'rankedRooms/' + currentRoomId + '/p2Input'), input).catch(() => {});
-      }, 5);
-
-      onValue(ref(db, 'rankedRooms/' + currentRoomId + '/state'), (snap) => {
-        const state = snap.val();
-        if (state && gameEngine) {
-          gameEngine.receiveRemoteState(state);
-        }
-      });
-    }
+    bindRealtimeMatch(currentRoomId);
   } else {
     // 🌟 單人天梯 / AI 對戰模式：同步註冊房間並廣播畫面，讓大廳與好友隨時 LIVE 觀戰！
     currentRoomId = 'room_' + uid + '_vs_ai_' + Date.now();
@@ -702,6 +773,7 @@ function handleRankedGameOver(playerWon) {
 if (modalBtnNext) {
   modalBtnNext.addEventListener('click', () => {
     matchModal.style.display = 'none';
+    clearMatchUnsubs();
     if (gameEngine) gameEngine.stop();
     switchTab('play');
   });
@@ -716,6 +788,7 @@ document.getElementById('btn-exit-arena').addEventListener('click', () => {
   if (!matchEnded && currentRoomId) {
     set(ref(db, 'rankedRooms/' + currentRoomId + '/abandoned'), { by: uid, name: nickname }).catch(() => {});
   }
+  clearMatchUnsubs();
   if (gameEngine) gameEngine.stop();
   window.location.href = './lobby.html';
 });

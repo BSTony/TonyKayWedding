@@ -1,10 +1,13 @@
+// Author: Tony Hsieh
+// Date: 2026-08-26
+// Version: 1.2.1
 {
   "rules": {
     "players": {
       ".indexOn": ["points", "lastSeen", "createdAt"],
       ".read": "auth != null",
       "$uid": {
-        ".write": "auth != null"
+        ".write": "auth != null && ($uid === auth.uid || $uid === 'google_' + auth.uid || !$uid.beginsWith('google_'))"
       }
     },
     "rankedQueue": {
@@ -22,6 +25,14 @@
       }
     },
     "tournamentRoom": {
+      ".read": "auth != null",
+      ".write": "auth != null"
+    },
+    "gameState": {
+      ".read": "auth != null",
+      ".write": "auth != null"
+    },
+    "serverInfo": {
       ".read": "auth != null",
       ".write": "auth != null"
     }
