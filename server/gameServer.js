@@ -1,6 +1,6 @@
 // Author: Tony Hsieh
 // Date: 2026-08-27
-// Version: 1.4.8
+// Version: 1.4.9
 import http from 'http';
 import express from 'express';
 import { WebSocketServer, WebSocket } from 'ws';
@@ -190,8 +190,15 @@ onValue(ref(db, 'rankedRooms'), (snapshot) => {
       // 忽略超過 3 分鐘前的舊廢棄房間
       const isFresh = room.createdAt && (now - room.createdAt < 3 * 60 * 1000);
       if (isFresh) {
-        if (!activeFirebaseRooms[roomId]) {
+        const live = activeFirebaseRooms[roomId];
+        if (!live) {
           startServerRoomSimulation(roomId, room);
+        } else {
+          const newer = Number(room.createdAt) && Number(live.createdAt) && Number(room.createdAt) > Number(live.createdAt) + 400;
+          const dead = live.roundState === 'game_over' || live._ending;
+          if (newer || dead) {
+            recycleServerRoom(roomId, room);
+          }
         }
       } else {
         // 舊房間自動結案
@@ -205,7 +212,7 @@ onValue(ref(db, 'rankedRooms'), (snapshot) => {
         const live = activeFirebaseRooms[roomId];
         if (!live._ending) {
           live._ending = true;
-          setTimeout(() => stopServerRoomSimulation(roomId), 1500);
+          setTimeout(() => stopServerRoomSimulation(roomId), 400);
         }
       } else if (activeFirebaseRooms[roomId]) {
         stopServerRoomSimulation(roomId);
@@ -213,6 +220,14 @@ onValue(ref(db, 'rankedRooms'), (snapshot) => {
     }
   }
 });
+
+function recycleServerRoom(roomId, roomData) {
+  const sockets = wsRooms[roomId];
+  stopServerRoomSimulation(roomId, { keepSockets: true });
+  startServerRoomSimulation(roomId, roomData);
+  if (sockets) wsRooms[roomId] = sockets;
+  console.log(`[Firebase Cloud Room ${roomId}] ♻️ 舊局已結束，重新開新一場物理。`);
+}
 
 function startServerRoomSimulation(roomId, roomData) {
   if (activeFirebaseRooms[roomId]) return; // 防止重複建立
@@ -239,6 +254,7 @@ function startServerRoomSimulation(roomId, roomData) {
     lastWriteTime: 0,
     ignoreClientPos: 0,
     newRoundHold: 0,
+    createdAt: roomData.createdAt || Date.now(),
   };
 
   // 標記此房間由雲端伺服器權威託管 (兩端玩家均不需當主機)
@@ -333,7 +349,7 @@ function startServerRoomSimulation(roomId, roomData) {
         set(ref(db, `rankedRooms/${roomId}/state`), finalState).catch(() => {});
         update(ref(db, `rankedRooms/${roomId}`), { status: 'finished' }).catch(() => {});
         roomState._ending = true;
-        setTimeout(() => stopServerRoomSimulation(roomId), 1500);
+        setTimeout(() => stopServerRoomSimulation(roomId), 400);
         return;
       } else {
         roomState.roundState = 'scoring';
@@ -412,14 +428,14 @@ function startServerRoomSimulation(roomId, roomData) {
   flushPendingInputs(roomId, roomState);
 }
 
-function stopServerRoomSimulation(roomId) {
+function stopServerRoomSimulation(roomId, opts = {}) {
   const room = activeFirebaseRooms[roomId];
   if (room) {
     if (room.loopTimer) clearInterval(room.loopTimer);
     if (room.unsubs) room.unsubs.forEach(u => typeof u === 'function' && u());
     delete activeFirebaseRooms[roomId];
     delete pendingInputs[roomId];
-    if (wsRooms[roomId]) delete wsRooms[roomId];
+    if (!opts.keepSockets && wsRooms[roomId]) delete wsRooms[roomId];
     console.log(`[Firebase Cloud Room ${roomId}] 房間物理計算結束釋放。`);
   }
 }

@@ -1,6 +1,6 @@
 // Author: Tony Hsieh
 // Date: 2026-08-27
-// Version: 2.3.10
+// Version: 2.3.11
 import { PikaPhysics, PikaUserInput, processPlayerMovementAndSetPlayerPosition } from './physics.js';
 
 /**
@@ -19,9 +19,9 @@ import { PikaPhysics, PikaUserInput, processPlayerMovementAndSetPlayerPosition }
 export class BadmintonEngine {
   constructor(canvasId) {
     this.canvas = document.getElementById(canvasId);
-    this.ctx = this.canvas.getContext('2d', { alpha: false });
+    this.ctx = this.canvas.getContext('2d', { alpha: false }) || this.canvas.getContext('2d');
 
-    // 手機 / LINE WebView 用 1x，避免 864x608 每幀重繪掉到十來格
+    // 手機畫布用 1x 保幀率；花瓣／火花等特效仍在本機播
     const ua = navigator.userAgent || '';
     this.lowFx = window.innerWidth < 900 || /Android|iPhone|iPod|Mobile|Line/i.test(ua);
     this.scale = this.lowFx ? 1 : 2;
@@ -29,7 +29,7 @@ export class BadmintonEngine {
     this.logicalHeight = 304;
     this.canvas.width = this.logicalWidth * this.scale;
     this.canvas.height = this.logicalHeight * this.scale;
-    this.ctx.imageSmoothingEnabled = false;
+    if (this.ctx) this.ctx.imageSmoothingEnabled = false;
     this._staticLayer = null;
 
     this.isRunning = false;
@@ -74,8 +74,8 @@ export class BadmintonEngine {
       this._staticLayer = null;
     };
 
-    // 浪漫玫瑰花瓣系統 (粉紅/象牙白玫瑰)；連線對戰少畫以保幀率
-    this.petals = Array.from({ length: this.lowFx ? 6 : 14 }, () => ({
+    // 浪漫玫瑰花瓣：純本機裝飾，不經伺服器
+    this.petals = Array.from({ length: this.lowFx ? 10 : 18 }, () => ({
       x: Math.random() * 432,
       y: Math.random() * 250,
       size: 2.5 + Math.random() * 3.5,
@@ -112,6 +112,7 @@ export class BadmintonEngine {
     this._wsClosedOnPurpose = false;
     this._wsRetry = 0;
     this._gameOverFired = false;
+    this._seenPlaying = false;
   }
 
   start(maxScore = 5, compBoldness = 2, onSendState = null) {
@@ -129,6 +130,7 @@ export class BadmintonEngine {
     this.pikaPhysics = new PikaPhysics(false, true);
     this.pikaPhysics.player2.computerBoldness = compBoldness;
     this._gameOverFired = false;
+    this._seenPlaying = false;
     this.lastFrameTime = performance.now();
     requestAnimationFrame(this.loop);
   }
@@ -153,6 +155,7 @@ export class BadmintonEngine {
     this.lastSentInputKey = '';
     this.pikaPhysics = new PikaPhysics(false, false);
     this._gameOverFired = false;
+    this._seenPlaying = false;
     this.lastFrameTime = performance.now();
     requestAnimationFrame(this.loop);
   }
@@ -171,7 +174,7 @@ export class BadmintonEngine {
     this.maxScore = maxScore;
     this.onSendInput = onSendInput;
     this.isRunning = true;
-    this.roundState = 'waiting'; // 等待伺服器第一個 state
+    this.roundState = 'playing';
     this.playerScore = 0;
     this.compScore = 0;
     this.punchEffects = [];
@@ -182,6 +185,7 @@ export class BadmintonEngine {
     this.powerHitBuffer = 0;
     this.pikaPhysics = new PikaPhysics(false, false);
     this._gameOverFired = false;
+    this._seenPlaying = false;
     this.lastFrameTime = performance.now();
     requestAnimationFrame(this.loop);
   }
@@ -205,6 +209,7 @@ export class BadmintonEngine {
     this.lastInputSendTime = 0;
     this.lastSentInputKey = '';
     this._gameOverFired = false;
+    this._seenPlaying = false;
     this.attachWebSocket(wsUrl, roomId, role);
     this.lastFrameTime = performance.now();
     requestAnimationFrame(this.loop);
@@ -307,19 +312,20 @@ export class BadmintonEngine {
   receiveRemoteState(state, source = 'rtdb') {
     if (!state) return;
     if ((this.multiplayerRole === 'host' || this.multiplayerRole === 'single') && source !== 'ws') {
-      const hostOver = state.round === 'game_over' ||
-        Number(state.s1) >= this.maxScore ||
-        Number(state.s2) >= this.maxScore;
-      if (hostOver) this.fireGameOver(state);
+      if (state.round === 'game_over' || state.winner === 'p1' || state.winner === 'p2') {
+        this.fireGameOver(state);
+      }
       return;
     }
     if (this.multiplayerRole === 'host' && source === 'ws') {
       this.yieldToCloudAuthority(this._wsRole || this.cloudRole || 'p1', this.onSendInput);
     }
 
-    const incomingOver = state.round === 'game_over' ||
-      Number(state.s1) >= this.maxScore ||
-      Number(state.s2) >= this.maxScore;
+    const incomingOver = state.round === 'game_over' || state.winner === 'p1' || state.winner === 'p2';
+    // 開局若還在等第一個 playing 畫面，丟掉上一場殘留的結束包
+    if (incomingOver && !this._seenPlaying) {
+      return;
+    }
 
     // 結束封包不可被「WS 還活著」視窗擋下，否則一邊永遠等不到結算
     if (source !== 'ws' && !incomingOver && this.lastWsStateTime && (performance.now() - this.lastWsStateTime) < 250) {
@@ -337,6 +343,7 @@ export class BadmintonEngine {
     }
 
     this.remoteHostState = state;
+    if (state.round === 'playing' || state.round === 'scoring') this._seenPlaying = true;
 
     const p1 = this.pikaPhysics.player1;
     const p2 = this.pikaPhysics.player2;
@@ -427,12 +434,15 @@ export class BadmintonEngine {
     }
 
     if (state.punch) {
-      this.addPunchEffect(state.punch.x, state.punch.y, state.punch.isPower);
+      const now = performance.now();
+      if (!this._lastLocalFx || now - this._lastLocalFx > 160) {
+        this.addPunchEffect(state.punch.x, state.punch.y, state.punch.isPower);
+      }
     }
   }
 
   fireGameOver(state = {}) {
-    if (this._gameOverFired) return;
+    if (this._gameOverFired || !this._seenPlaying) return;
     this._gameOverFired = true;
     this.roundState = 'game_over';
     const s1 = Number.isFinite(Number(state.s1)) ? Number(state.s1) : this.playerScore;
@@ -547,6 +557,17 @@ export class BadmintonEngine {
           otherPlayer,
           this.pikaPhysics.ball
         );
+
+        // 打擊火花在本機播，不跟伺服器判定搶同一個迴圈
+        const ball = this.pikaPhysics.ball;
+        const overlapping = Math.abs(ball.x - myPlayer.x) <= 32 && Math.abs(ball.y - myPlayer.y) <= 32;
+        if (overlapping && !this._localHitFx) {
+          this._localHitFx = true;
+          this._lastLocalFx = performance.now();
+          this.addPunchEffect(ball.x, ball.y, myPlayer.state === 2);
+        } else if (!overlapping) {
+          this._localHitFx = false;
+        }
       }
 
       const currentInputKey = `${this.keys.left ? 1 : 0},${this.keys.right ? 1 : 0},${this.keys.up ? 1 : 0},${this.keys.down ? 1 : 0},${hit}`;
@@ -894,8 +915,7 @@ export class BadmintonEngine {
   }
 
   draw() {
-    if (!this.spriteLoaded) return;
-
+    if (!this.ctx) return;
     const ctx = this.ctx;
     ctx.imageSmoothingEnabled = false;
 
@@ -912,25 +932,23 @@ export class BadmintonEngine {
       ctx.fillRect(0, 0, 432, 248);
     }
 
-    // 連線對戰略過花瓣，避免手機/LINE 每幀旋轉 ellipse 拖垮幀率
-    if (!this.lowFx && this.multiplayerRole === 'single') {
-      for (const p of this.petals) {
-        p.wobble += p.wobbleSpeed;
-        p.x += p.speedX + Math.sin(p.wobble) * 0.3;
-        p.y += p.speedY;
-        p.rot += p.rotSpeed;
+    if (!this.spriteLoaded) {
+      ctx.restore();
+      return;
+    }
 
-        if (p.y > 248) {
-          p.y = -10;
-          p.x = Math.random() * 432;
-        }
-        if (p.x > 432) {
-          p.x = -10;
-        }
-
-        ctx.fillStyle = p.color;
-        ctx.fillRect(p.x, p.y, p.size, p.size * 0.7);
+    // 花瓣純本機裝飾
+    for (const p of this.petals) {
+      p.wobble += p.wobbleSpeed;
+      p.x += p.speedX + Math.sin(p.wobble) * 0.3;
+      p.y += p.speedY;
+      if (p.y > 248) {
+        p.y = -10;
+        p.x = Math.random() * 432;
       }
+      if (p.x > 432) p.x = -10;
+      ctx.fillStyle = p.color;
+      ctx.fillRect(p.x, p.y, p.size, p.size * 0.7);
     }
 
     // ── 動態陰影、角色與球 ──

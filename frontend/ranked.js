@@ -1,6 +1,6 @@
 // Author: Tony Hsieh
 // Date: 2026-08-27
-// Version: 2.3.10
+// Version: 2.3.11
 import './version.js';
 import { db, ref, onValue, set, update, remove, increment, onDisconnect } from './firebase.js';
 import { BadmintonEngine, setGlobalEngine } from './badmintonEngine.js';
@@ -607,6 +607,7 @@ function bindRealtimeMatch(roomId) {
   const myRole = isHostPlayer ? 'p1' : 'p2';
   const inputPath = myRole === 'p1' ? '/p1Input' : '/p2Input';
   let lastFbInputAt = 0;
+  let hasSeenPlaying = false;
 
   const sendInput = (input) => {
     const now = performance.now();
@@ -624,7 +625,7 @@ function bindRealtimeMatch(roomId) {
 
   const unsubAbandoned = onValue(ref(db, roomBase + '/abandoned'), (snap) => {
     const ab = snap.val();
-    if (ab && !matchEnded) {
+    if (ab && !matchEnded && hasSeenPlaying) {
       matchEnded = true;
       clearMatchUnsubs();
       if (gameEngine) gameEngine.stop();
@@ -652,8 +653,9 @@ function bindRealtimeMatch(roomId) {
   const unsubState = onValue(ref(db, roomBase + '/state'), (snap) => {
     const state = snap.val();
     if (!state || !gameEngine) return;
+    if (state.round === 'playing' || state.round === 'scoring') hasSeenPlaying = true;
     gameEngine.receiveRemoteState(state, 'rtdb');
-    if (!matchEnded && (state.round === 'game_over' || state.s1 >= 5 || state.s2 >= 5)) {
+    if (!matchEnded && hasSeenPlaying && state.round === 'game_over') {
       const myScore = isHostPlayer ? (state.s1 || 0) : (state.s2 || 0);
       const oppScore = isHostPlayer ? (state.s2 || 0) : (state.s1 || 0);
       finishRankedMatch(myScore > oppScore);
@@ -662,7 +664,7 @@ function bindRealtimeMatch(roomId) {
   matchUnsubs.push(unsubState);
 
   const unsubStatus = onValue(ref(db, roomBase + '/status'), (snap) => {
-    if (snap.val() !== 'finished' || matchEnded || !gameEngine) return;
+    if (snap.val() !== 'finished' || matchEnded || !hasSeenPlaying || !gameEngine) return;
     setTimeout(() => {
       if (matchEnded || !gameEngine) return;
       const s1 = gameEngine.playerScore || 0;
