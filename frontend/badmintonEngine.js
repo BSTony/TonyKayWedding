@@ -1,6 +1,6 @@
 // Author: Tony Hsieh
 // Date: 2026-08-27
-// Version: 2.3.6
+// Version: 2.3.7
 import { PikaPhysics, PikaUserInput, processPlayerMovementAndSetPlayerPosition } from './physics.js';
 
 /**
@@ -309,10 +309,14 @@ export class BadmintonEngine {
     if (source !== 'ws' && this.lastWsStateTime && (performance.now() - this.lastWsStateTime) < 250) {
       return;
     }
-    if (state.ts && this.lastStateT && state.ts + 40 < this.lastStateT) {
-      return;
+    if (state.newRound) {
+      this.lastStateT = state.ts || this.lastStateT;
+    } else {
+      if (state.ts && this.lastStateT && state.ts + 40 < this.lastStateT) {
+        return;
+      }
+      if (state.ts) this.lastStateT = state.ts;
     }
-    if (state.ts) this.lastStateT = state.ts;
 
     this.remoteHostState = state;
 
@@ -323,9 +327,11 @@ export class BadmintonEngine {
     const isPredicted = (this.multiplayerRole === 'firebase' || this.multiplayerRole === 'cloud' || this.multiplayerRole === 'guest') && (this.cloudRole !== 'spectate');
     const isP1 = (this.cloudRole === 'p1');
     const isP2 = (this.cloudRole === 'p2');
-    // 只有開新局才拉回本人位置。落地得分時若立刻對齊，會在球還在空中時把人拖走。
-    const alignLocal = !!state.newRound;
-    const ballAlign = !!(state.newRound || state.round === 'scoring' || state.round === 'game_over');
+    const alignLocal = !!(
+      state.newRound ||
+      (state.round === 'playing' && this.roundState === 'scoring')
+    );
+    const ballAlign = !!(alignLocal || state.round === 'scoring' || state.round === 'game_over');
 
     const applyActor = (actor, snap, isLocal, defaultDive) => {
       if (!snap) return;
@@ -773,7 +779,7 @@ export class BadmintonEngine {
     // 解決 Mac 120Hz ProMotion 螢幕 / Safari 與 Windows 60Hz 的幀率差異，確保在任何刷新率下均維持最極致絲滑度！
     const dtRatio = Math.max(0.1, Math.min(3.0, elapsed / 16.666));
     const usingWs = this.lastWsStateTime && (performance.now() - this.lastWsStateTime) < 2500;
-    const smoothTarget = usingWs ? 0.35 : 0.22;
+    const smoothTarget = usingWs ? 0.55 : 0.35;
     const smoothFactor = 1 - Math.pow(1 - smoothTarget, dtRatio);
 
     const isP1 = (this.cloudRole === 'p1');
@@ -800,16 +806,17 @@ export class BadmintonEngine {
       else this.smoothP2.y += (targetP2Y - this.smoothP2.y) * smoothFactor;
     }
 
-    // 羽毛球直接跟伺服器座標，不外推，避免畫面接觸點和判定點錯開
+    // 羽毛球緊跟伺服器，並補半幀速度，減少「鈍鈍的」延遲感
     if (this.roundState === 'scoring' || this.roundState === 'game_over' ||
-        Math.abs(this.smoothBall.x - targetBallX) > 40 ||
-        Math.abs(this.smoothBall.y - targetBallY) > 40) {
+        Math.abs(this.smoothBall.x - targetBallX) > 28 ||
+        Math.abs(this.smoothBall.y - targetBallY) > 28) {
       this.smoothBall.x = targetBallX;
       this.smoothBall.y = targetBallY;
     } else {
-      const ballFollow = 1 - Math.pow(1 - 0.55, dtRatio);
-      this.smoothBall.x += (targetBallX - this.smoothBall.x) * ballFollow;
-      this.smoothBall.y += (targetBallY - this.smoothBall.y) * ballFollow;
+      const leadX = targetBallX + b.xVelocity * 0.45;
+      const leadY = Math.min(252, targetBallY + b.yVelocity * 0.45);
+      this.smoothBall.x = leadX;
+      this.smoothBall.y = leadY;
     }
   }
 

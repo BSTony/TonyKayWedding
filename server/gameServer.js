@@ -1,6 +1,6 @@
 // Author: Tony Hsieh
 // Date: 2026-08-27
-// Version: 1.4.4
+// Version: 1.4.5
 import http from 'http';
 import express from 'express';
 import { WebSocketServer, WebSocket } from 'ws';
@@ -129,7 +129,7 @@ function fillUserInput(dest, raw, isP2, hitHold) {
   }
 }
 
-function reconcilePlayerFromClient(player, raw, isP2) {
+function reconcilePlayerFromClient(player, raw, isP2, ball) {
   const x = Number(raw && raw.x);
   const y = Number(raw && raw.y);
   if (!Number.isFinite(x) || !Number.isFinite(y)) return;
@@ -138,6 +138,9 @@ function reconcilePlayerFromClient(player, raw, isP2) {
   if (x < minX - 12 || x > maxX + 12) return;
   const nx = Math.max(minX, Math.min(maxX, x));
   const ny = Math.max(0, Math.min(GROUND_Y, y));
+  const spawnX = isP2 ? GROUND_WIDTH - 36 : 36;
+  // 發球剛開始時拒絕上一球殘留的中場座標，避免一端回原點、另一端還站在舊位置
+  if (ball && ball.y < 64 && Math.abs(nx - spawnX) > 72) return;
   player._netSync = true;
   player._netX = player.x + Math.max(-NET_SYNC_MAX_DELTA, Math.min(NET_SYNC_MAX_DELTA, nx - player.x));
   player._netY = player.y + Math.max(-NET_SYNC_MAX_DELTA, Math.min(NET_SYNC_MAX_DELTA, ny - player.y));
@@ -162,6 +165,7 @@ function packRoomState(roomState, extra = {}) {
     s1: roomState.s1,
     s2: roomState.s2,
     round: roomState.roundState,
+    ...(roomState.newRoundHold > 0 ? { newRound: true } : {}),
     ...extra
   };
 }
@@ -230,6 +234,7 @@ function startServerRoomSimulation(roomId, roomData) {
     loopTimer: null,
     lastWriteTime: 0,
     ignoreClientPos: 0,
+    newRoundHold: 0,
   };
 
   // 標記此房間由雲端伺服器權威託管 (兩端玩家均不需當主機)
@@ -258,7 +263,12 @@ function startServerRoomSimulation(roomId, roomData) {
 
   // 30 FPS 物理循環 (33.33ms)
   roomState.loopTimer = setInterval(() => {
-    if (roomState.roundState !== 'playing') return;
+    if (roomState.roundState !== 'playing') {
+      if (roomState.roundState === 'scoring') {
+        broadcastWs(roomId, packRoomState(roomState));
+      }
+      return;
+    }
 
     const p1 = physics.player1;
     const p2 = physics.player2;
@@ -271,9 +281,10 @@ function startServerRoomSimulation(roomId, roomData) {
     if (roomState.ignoreClientPos > 0) {
       roomState.ignoreClientPos--;
     } else {
-      reconcilePlayerFromClient(p1, roomState.p1Raw, false);
-      reconcilePlayerFromClient(p2, roomState.p2Raw, true);
+      reconcilePlayerFromClient(p1, roomState.p1Raw, false, b);
+      reconcilePlayerFromClient(p2, roomState.p2Raw, true, b);
     }
+    if (roomState.newRoundHold > 0) roomState.newRoundHold--;
 
     const prevPunch = b.punchEffectRadius;
     const isTouchingGround = physics.runEngineForNextFrame([p1Input, p2Input]);
@@ -352,7 +363,8 @@ function startServerRoomSimulation(roomId, roomData) {
           roomState.p2Raw = { left: false, right: false, up: false, down: false, powerHit: 0 };
           roomState.p1HitHold = 0;
           roomState.p2HitHold = 0;
-          roomState.ignoreClientPos = 2;
+          roomState.ignoreClientPos = 5;
+          roomState.newRoundHold = 5;
           roomState.roundState = 'playing';
 
           const newRoundState = {
@@ -372,36 +384,17 @@ function startServerRoomSimulation(roomId, roomData) {
     }
 
     const now = Date.now();
+    broadcastWs(roomId, packRoomState(roomState, punchEvent ? { punch: punchEvent } : {}));
 
-    // 1. WebSocket 高速極速通道廣播 (10ms 零延遲直連)
     const sockets = wsRooms[roomId];
-    if (sockets) {
-      const wsPayload = JSON.stringify({
-        t: 's',
-        ts: now,
-        p1: { x: p1.x, y: p1.y, s: p1.state, f: p1.frameNumber, d: p1.divingDirection },
-        p2: { x: p2.x, y: p2.y, s: p2.state, f: p2.frameNumber, d: p2.divingDirection },
-        b: {
-          x: b.x, y: b.y, vx: b.xVelocity, vy: b.yVelocity, rot: b.rotation, power: b.isPowerHit,
-          px: b.previousX, py: b.previousY
-        },
-        s1: roomState.s1,
-        s2: roomState.s2,
-        round: roomState.roundState,
-        punch: punchEvent
-      });
-      if (sockets.p1 && sockets.p1.readyState === WebSocket.OPEN) sockets.p1.send(wsPayload);
-      if (sockets.p2 && sockets.p2.readyState === WebSocket.OPEN) sockets.p2.send(wsPayload);
-    }
-
     const hasWsClient = sockets && (
       (sockets.p1 && sockets.p1.readyState === WebSocket.OPEN) ||
       (sockets.p2 && sockets.p2.readyState === WebSocket.OPEN)
     );
     const rtdbInterval = hasWsClient ? 500 : 80;
-    if (now - roomState.lastWriteTime > rtdbInterval || punchEvent || isTouchingGround) {
+    if (now - roomState.lastWriteTime > rtdbInterval || punchEvent || isTouchingGround || roomState.newRoundHold > 0) {
       roomState.lastWriteTime = now;
-      set(ref(db, `rankedRooms/${roomId}/state`), {
+      const rtdbState = {
         p1: { x: p1.x, y: p1.y, state: p1.state, frameNumber: p1.frameNumber, divingDirection: p1.divingDirection },
         p2: { x: p2.x, y: p2.y, state: p2.state, frameNumber: p2.frameNumber, divingDirection: p2.divingDirection },
         b: {
@@ -413,7 +406,9 @@ function startServerRoomSimulation(roomId, roomData) {
         round: roomState.roundState,
         punch: punchEvent,
         ts: now
-      }).catch(() => {});
+      };
+      if (roomState.newRoundHold > 0) rtdbState.newRound = true;
+      set(ref(db, `rankedRooms/${roomId}/state`), rtdbState).catch(() => {});
     }
   }, 1000 / 30);
 
